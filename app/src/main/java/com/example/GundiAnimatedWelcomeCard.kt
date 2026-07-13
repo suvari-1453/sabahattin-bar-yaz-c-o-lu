@@ -50,11 +50,11 @@ fun GundiAnimatedWelcomeCard(
     // Turkish Gundi Greetings
     val greetings = remember {
         listOf(
-            "Ooo şefim hoş geldin! Gözlerim yollarda kaldı bro. Sırlar paneli tamamsa dök içini Gundi baddine, hemen halledelim! 😎",
-            "Aha, buraların kralı damladı! Bugün hangi çılgın problemi dize getireceğiz başkan? Söyle de yapay zekam şenlensin! 🚀",
-            "Selam bro! Çaylar benden, dert ortağı olmak senden. Anlat bakalım, bugün Gundi'den ne istiyorsun? ☕",
-            "Gundi badin sana kurban olsun bro! Bugün karizma seviyemiz zirvede, hadi beynimin işlemcilerini coşturacak bir soru sor! 🧠",
-            "Brooo! Hoş geldin. Yine efsanevi bir sohbete hazır mıyız? İstediğin konudan dalabilirsin, sınırımız yok! 🎯"
+            "Hoş geldin reisim Barış abim! Gözlerim yollarda kaldı bro. Sırlar paneli tamamsa dök içini Gundi baddine, hemen halledelim! 😎",
+            "Aha, buraların kralı Barış abim damladı! Bugün hangi çılgın problemi dize getireceğiz başkan? Söyle de yapay zekam şenlensin! 🚀",
+            "Selam reisim Barış abim! Çaylar benden, dert ortağı olmak senden. Anlat bakalım, bugün Gundi'den ne istiyorsun? ☕",
+            "Gundi badin sana kurban olsun Barış abim! Bugün karizma seviyemiz zirvede, hadi beynimin işlemcilerini coşturacak bir soru sor! 🧠",
+            "Barış abim! Hoş geldin reisim. Yine efsanevi bir sohbete hazır mıyız? İstediğin konudan dalabilirsin, sınırımız yok! 🎯"
         )
     }
 

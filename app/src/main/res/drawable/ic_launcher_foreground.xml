@@ -1,8 +1,102 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/img_gundi_cute_1783759629194"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Hair -->
+    <path
+        android:strokeColor="#212121"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,24 L54,16" />
+    <path
+        android:strokeColor="#212121"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M51,24 L48,17" />
+    <path
+        android:strokeColor="#212121"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M57,24 L60,17" />
+
+    <!-- Minion Yellow Body Capsule -->
+    <path
+        android:fillColor="#FFD54F"
+        android:pathData="M34,44 C34,33 43,24 54,24 C65,24 74,33 74,44 L74,64 C74,75 65,84 54,84 C43,84 34,75 34,64 Z" />
+
+    <!-- Overalls Left Strap -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M34,48 L44,56 L41,58 L34,50 Z" />
+    <!-- Overalls Right Strap -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M74,48 L64,56 L67,58 L74,50 Z" />
+
+    <!-- Overalls Blue Pants and Bib -->
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M34,60 C34,73.25 43,84 54,84 C65,84 74,73.25 74,60 L74,56 L64,56 L64,60 L44,60 L44,56 L34,56 Z" />
+
+    <!-- Goggle Strap (Behind Glasses) -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M34,40 h40 v4 h-40 z" />
+
+    <!-- Left Goggle Silver Frame -->
+    <path
+        android:fillColor="#B0BEC5"
+        android:pathData="M44,31 A11,11 0 1,1 44,53 A11,11 0 1,1 44,31" />
+    <!-- Right Goggle Silver Frame -->
+    <path
+        android:fillColor="#B0BEC5"
+        android:pathData="M64,31 A11,11 0 1,1 64,53 A11,11 0 1,1 64,31" />
+
+    <!-- Left Goggle Inner White -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,34 A8,8 0 1,1 44,50 A8,8 0 1,1 44,34" />
+    <!-- Right Goggle Inner White -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,34 A8,8 0 1,1 64,50 A8,8 0 1,1 64,34" />
+
+    <!-- Left Pupil Brown -->
+    <path
+        android:fillColor="#795548"
+        android:pathData="M45.5,38 A4,4 0 1,1 45.5,46 A4,4 0 1,1 45.5,38" />
+    <!-- Right Pupil Brown -->
+    <path
+        android:fillColor="#795548"
+        android:pathData="M62.5,38 A4,4 0 1,1 62.5,46 A4,4 0 1,1 62.5,38" />
+
+    <!-- Left Pupil Black -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M45.5,40 A2,2 0 1,1 45.5,44 A2,2 0 1,1 45.5,40" />
+    <!-- Right Pupil Black -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M62.5,40 A2,2 0 1,1 62.5,44 A2,2 0 1,1 62.5,40" />
+
+    <!-- Left Pupil Shine -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47,39.5 A1,1 0 1,1 47,41.5 A1,1 0 1,1 47,39.5" />
+    <!-- Right Pupil Shine -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,39.5 A1,1 0 1,1 64,41.5 A1,1 0 1,1 64,39.5" />
+
+    <!-- Mouth Smile -->
+    <path
+        android:strokeColor="#4E342E"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M48,51 Q54,56 60,51"
+        android:fillColor="#00000000" />
+
+</vector>

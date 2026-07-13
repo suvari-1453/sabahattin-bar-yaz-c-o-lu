@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -183,7 +184,8 @@ fun AssistantHubDialog(
                         "⏰ Hatırlatıcılar" to 1,
                         "🌐 Çevirmen" to 2,
                         "📄 Özetleyici" to 3,
-                        "☀️ Hava Durumu" to 4
+                        "☀️ Hava Durumu" to 4,
+                        "☁️ Cloudflare" to 5
                     )
                     tabs.forEach { (title, index) ->
                         Tab(
@@ -221,6 +223,7 @@ fun AssistantHubDialog(
                         2 -> TranslatorTab()
                         3 -> SummarizerTab()
                         4 -> WeatherAssistantTab()
+                        5 -> CloudflareDnsTab()
                     }
                 }
             }
@@ -1214,3 +1217,589 @@ fun WeatherAssistantTab() {
         }
     }
 }
+
+// ==================== TAB 5: CLOUDFLARE DNS MANAGEMENT ====================
+@Composable
+fun CloudflareDnsTab() {
+    val coroutineScope = rememberCoroutineScope()
+    val token = BuildConfig.CLOUDFLARE_TOKEN
+    val zoneId = BuildConfig.CLOUDFLARE_ZONE_ID
+    val accountId = BuildConfig.CLOUDFLARE_ACCOUNT_ID
+
+    var records by remember { mutableStateOf<List<CloudflareRecord>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var actionLoading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    var successMsg by remember { mutableStateOf<String?>(null) }
+
+    // Form inputs
+    var newType by remember { mutableStateOf("A") }
+    var newName by remember { mutableStateOf("") }
+    var newContent by remember { mutableStateOf("") }
+    var newProxied by remember { mutableStateOf(true) }
+    var newTtl by remember { mutableStateOf(1) } // 1 is Automatic TTL in Cloudflare
+
+    val recordTypes = listOf("A", "AAAA", "CNAME", "TXT", "MX")
+
+    fun loadRecords() {
+        if (token.isBlank() || zoneId.isBlank() || token.startsWith("MY_") || token.startsWith("CLOUDFLARE_")) {
+            errorMsg = "Lütfen önce .env dosyasına geçerli Cloudflare kimlik bilgilerinizi girin!"
+            return
+        }
+        isLoading = true
+        errorMsg = null
+        coroutineScope.launch {
+            val fetched = CloudflareManager.fetchDnsRecords(token, zoneId)
+            records = fetched
+            isLoading = false
+            if (fetched.isEmpty()) {
+                errorMsg = "DNS kayıtları alınamadı veya liste boş. Lütfen API token ve Zone ID'nizi doğrulayın."
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadRecords()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+    ) {
+        // Domain Info Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Aktif Alan Adı: gundi.com 👑",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD54F)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Cloudflare Entegrasyonu",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
+                    IconButton(
+                        onClick = { loadRecords() },
+                        modifier = Modifier.testTag("refresh_dns_button")
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Yenile", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = Color.White.copy(alpha = 0.08f))
+
+                // Account / Zone Details
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Bölge Kimliği (Zone ID)", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = if (zoneId.length > 8) zoneId.take(8) + "..." + zoneId.takeLast(6) else zoneId,
+                            fontSize = 12.sp,
+                            color = Color.White,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Hesap Kimliği (Account ID)", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = if (accountId.length > 8) accountId.take(8) + "..." + accountId.takeLast(6) else accountId,
+                            fontSize = 12.sp,
+                            color = Color.White,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+
+        // Apply Reisin Şablonu (Predefined Records Quick Action)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
+            border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.2f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD54F), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Barış Abimin DNS Şablonu 👑",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Gözlerin yollarda kalmasın! gundi.com için A, CNAME, MX ve TXT kayıtlarını tek bir tıkla otomatik olarak Cloudflare üzerinde yapılandırabilirsin.",
+                    fontSize = 12.sp,
+                    color = Color.LightGray
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        actionLoading = true
+                        successMsg = null
+                        errorMsg = null
+                        coroutineScope.launch {
+                            // Define Baris Abi's predefined records
+                            val templateRecords = listOf(
+                                Triple("A", "gundi.com", "216.168.96.50"),
+                                Triple("A", "mail.gundi.com", "216.168.96.50"),
+                                Triple("A", "webmail.gundi.com", "216.168.96.50"),
+                                Triple("CNAME", "ftp.gundi.com", "gundi.com"),
+                                Triple("CNAME", "www.gundi.com", "gundi.com"),
+                                Triple("MX", "gundi.com", "10 mail.gundi.com"),
+                                Triple("TXT", "gundi.com", "v=spf1 +a +mx -all")
+                            )
+
+                            var createdCount = 0
+                            for (rec in templateRecords) {
+                                // Check if already exists to prevent duplicate
+                                val exists = records.any { it.type == rec.first && it.name.contains(rec.second) }
+                                if (!exists) {
+                                    val success = CloudflareManager.createDnsRecord(
+                                        token = token,
+                                        zoneId = zoneId,
+                                        type = rec.first,
+                                        name = rec.second,
+                                        content = rec.third,
+                                        ttl = 1,
+                                        proxied = rec.first == "A" || rec.first == "CNAME"
+                                    )
+                                    if (success) createdCount++
+                                }
+                            }
+                            actionLoading = false
+                            if (createdCount > 0) {
+                                successMsg = "$createdCount adet şablon DNS kaydı başarıyla oluşturuldu reisim!"
+                                loadRecords()
+                            } else {
+                                successMsg = "Şablon kayıtlar zaten mevcut veya eklenemedi!"
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("apply_template_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD54F)),
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = !actionLoading && !isLoading
+                ) {
+                    if (actionLoading) {
+                        CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(18.dp))
+                    } else {
+                        Text("Şablonu Otomatik Kur (Gözüm Kapalı) 🚀", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // Message Banners
+        if (errorMsg != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F).copy(alpha = 0.1f)),
+                border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = errorMsg!!,
+                    color = Color(0xFFEF5350),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(10.dp),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        if (successMsg != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF388E3C).copy(alpha = 0.1f)),
+                border = BorderStroke(1.dp, Color(0xFF388E3C).copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = successMsg!!,
+                    color = Color(0xFF81C784),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(10.dp),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        // Add DNS Record Form
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "Yeni DNS Kaydı Oluştur",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Type selector row
+                Text("Kayıt Türü", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    recordTypes.forEach { type ->
+                        val isSelected = newType == type
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.05f))
+                                .clickable { newType = type }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = type,
+                                color = if (isSelected) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Name & Content fields
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("İsim (örn: www veya @)", color = Color.Gray) },
+                    placeholder = { Text("gundi.com", color = Color.DarkGray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = newContent,
+                    onValueChange = { newContent = it },
+                    label = { Text("İçerik (örn: IP adresi veya Hedef)", color = Color.Gray) },
+                    placeholder = { Text("216.168.96.50", color = Color.DarkGray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Proxied and TTL row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Proxied switch (A / CNAME only)
+                    if (newType == "A" || newType == "CNAME") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(
+                                checked = newProxied,
+                                onCheckedChange = { newProxied = it },
+                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                            )
+                            Column {
+                                Text("Vekil Sunucu (Proxied)", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                                Text("Cloudflare koruması aktif", fontSize = 10.sp, color = Color.Gray)
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+
+                    // TTL Indicator
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("TTL", fontSize = 11.sp, color = Color.Gray)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text("Otomatik (Auto)", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Submit Button
+                Button(
+                    onClick = {
+                        if (newName.isBlank() || newContent.isBlank()) {
+                            errorMsg = "Lütfen isim ve içerik alanlarını doldurun reisim!"
+                            return@Button
+                        }
+                        actionLoading = true
+                        errorMsg = null
+                        successMsg = null
+                        coroutineScope.launch {
+                            val success = CloudflareManager.createDnsRecord(
+                                token = token,
+                                zoneId = zoneId,
+                                type = newType,
+                                name = newName,
+                                content = newContent,
+                                ttl = newTtl,
+                                proxied = newProxied
+                            )
+                            actionLoading = false
+                            if (success) {
+                                successMsg = "DNS kaydı başarıyla eklendi!"
+                                newName = ""
+                                newContent = ""
+                                loadRecords()
+                            } else {
+                                errorMsg = "DNS kaydı oluşturulamadı. Cloudflare API hata döndürdü."
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("add_dns_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = !actionLoading && !isLoading
+                ) {
+                    if (actionLoading) {
+                        CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(18.dp))
+                    } else {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("DNS Kaydını Kaydet 💾", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Records List Title
+        Text(
+            text = "Kayıtlı DNS Kayıtları (${records.size})",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.LightGray,
+            modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp)
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        } else if (records.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 30.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.CloudQueue, contentDescription = null, modifier = Modifier.size(44.dp), tint = Color.Gray)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Hiç aktif kayıt bulunamadı.", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        } else {
+            // LazyColumn replacement inside scrollable tab with Column + forEach to prevent nested scroll crashes
+            records.forEach { record ->
+                val recordColor = when (record.type) {
+                    "A" -> Color(0xFF81C784)
+                    "CNAME" -> Color(0xFF64B5F6)
+                    "TXT" -> Color(0xFFBA68C8)
+                    "MX" -> Color(0xFFFFD54F)
+                    else -> Color.White
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.02f))
+                        .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        // Badge
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(recordColor.copy(alpha = 0.12f))
+                                .border(1.2.dp, recordColor.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = record.type,
+                                fontSize = 11.sp,
+                                color = recordColor,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = record.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                // Proxied badge ☁️
+                                if (record.proxied) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color(0xFFF57C00).copy(alpha = 0.15f))
+                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Cloud,
+                                                contentDescription = "Proxied",
+                                                tint = Color(0xFFFFB74D),
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                            Text(
+                                                "Proxied",
+                                                fontSize = 8.sp,
+                                                color = Color(0xFFFFB74D),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color.White.copy(alpha = 0.08f))
+                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            "DNS Only",
+                                            fontSize = 8.sp,
+                                            color = Color.Gray,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = record.content,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.LightGray,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    // Delete Record Action
+                    IconButton(
+                        onClick = {
+                            actionLoading = true
+                            errorMsg = null
+                            successMsg = null
+                            coroutineScope.launch {
+                                val success = CloudflareManager.deleteDnsRecord(token, zoneId, record.id)
+                                actionLoading = false
+                                if (success) {
+                                    successMsg = "DNS kaydı başarıyla silindi reisim!"
+                                    loadRecords()
+                                } else {
+                                    errorMsg = "Kayıt silinemedi. Cloudflare API hata döndürdü."
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .testTag("delete_record_${record.id}")
+                            .size(36.dp),
+                        enabled = !actionLoading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Sil",
+                            tint = Color.Gray.copy(alpha = 0.8f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

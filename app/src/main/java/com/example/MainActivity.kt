@@ -1151,69 +1151,94 @@ fun ChatScreen(
                         }
                     }
 
-                    if (isConsoleMode) {
-                        Row(
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(
+                            onClick = { documentPickerLauncher.launch("*/*") },
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                .size(44.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                         ) {
-                            IconButton(
-                                onClick = { isConsoleMode = false },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
-                                    contentDescription = "Sesli Moda Geç",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            IconButton(
-                                onClick = { documentPickerLauncher.launch("*/*") },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                            ) {
-                                Icon(Icons.Default.AttachFile, contentDescription = "Dosya Ekle", tint = MaterialTheme.colorScheme.primary)
-                            }
-                            IconButton(
-                                onClick = { imagePickerLauncher.launch("image/*") },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                            ) {
-                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Resim Ekle", tint = MaterialTheme.colorScheme.primary)
-                            }
+                            Icon(Icons.Default.AttachFile, contentDescription = "Dosya Ekle", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        IconButton(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                        ) {
+                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Resim Ekle", tint = MaterialTheme.colorScheme.primary)
+                        }
 
-                            OutlinedTextField(
-                                value = inputText,
-                                onValueChange = { inputText = it },
-                                placeholder = { Text("gundi@bro:~$ Mesaj yazın...", color = Color(0xFF00FF00).copy(alpha = 0.5f), fontSize = 13.sp) },
-                                textStyle = androidx.compose.ui.text.TextStyle(
-                                    color = Color(0xFF00FF00),
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                    fontSize = 14.sp
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(28.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color(0xFF0D0E12),
-                                    unfocusedContainerColor = Color(0xFF0D0E12),
-                                    focusedBorderColor = Color(0xFF00FF00),
-                                    unfocusedBorderColor = Color(0xFF00FF00).copy(alpha = 0.4f),
-                                    cursorColor = Color(0xFF00FF00)
-                                ),
-                                singleLine = true,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
-                                ),
-                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                    onSend = {
+                        OutlinedTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            placeholder = { Text("gundi@bro:~$ Mesaj yazın...", color = Color(0xFF00FF00).copy(alpha = 0.5f), fontSize = 13.sp) },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Color(0xFF00FF00),
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontSize = 14.sp
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF0D0E12),
+                                unfocusedContainerColor = Color(0xFF0D0E12),
+                                focusedBorderColor = Color(0xFF00FF00),
+                                unfocusedBorderColor = Color(0xFF00FF00).copy(alpha = 0.4f),
+                                cursorColor = Color(0xFF00FF00)
+                            ),
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onSend = {
+                                    if (inputText.isNotBlank() || selectedBitmap != null || selectedFile != null) {
+                                        val prompt = inputText
+                                        inputText = ""
+                                        val bmp = selectedBitmap
+                                        selectedBitmap = null
+                                        val file = selectedFile
+                                        selectedFile = null
+                                        
+                                        val detected = analyzeSentiment(prompt)
+                                        if (detected != CharacterExpression.IDLE) {
+                                            userSentimentExpression = detected
+                                        }
+                                        viewModel.sendMessage(prompt, bmp, file, context)
+                                    }
+                                }
+                            ),
+                            leadingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        if (isListening) {
+                                            speechRecognizer.stopListening()
+                                            isListening = false
+                                            soundLevel = 0f
+                                        } else {
+                                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                                        contentDescription = "Sesle Konuş",
+                                        tint = if (isListening) Color(0xFFFF1744) else Color(0xFFFFD54F)
+                                    )
+                                }
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
                                         if (inputText.isNotBlank() || selectedBitmap != null || selectedFile != null) {
                                             val prompt = inputText
                                             inputText = ""
@@ -1229,148 +1254,15 @@ fun ChatScreen(
                                             viewModel.sendMessage(prompt, bmp, file, context)
                                         }
                                     }
-                                ),
-                                trailingIcon = {
-                                    IconButton(
-                                        onClick = {
-                                            if (inputText.isNotBlank() || selectedBitmap != null || selectedFile != null) {
-                                                val prompt = inputText
-                                                inputText = ""
-                                                val bmp = selectedBitmap
-                                                selectedBitmap = null
-                                                val file = selectedFile
-                                                selectedFile = null
-                                                
-                                                val detected = analyzeSentiment(prompt)
-                                                if (detected != CharacterExpression.IDLE) {
-                                                    userSentimentExpression = detected
-                                                }
-                                                viewModel.sendMessage(prompt, bmp, file, context)
-                                            }
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.Send,
-                                            contentDescription = "Gönder",
-                                            tint = if (inputText.isNotBlank()) Color(0xFF00FF00) else Color.Gray
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            IconButton(
-                                onClick = { isConsoleMode = true },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Keyboard,
-                                    contentDescription = "Yazma Konsoluna Geç",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            IconButton(
-                                onClick = { documentPickerLauncher.launch("*/*") },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                            ) {
-                                Icon(Icons.Default.AttachFile, contentDescription = "Dosya Ekle", tint = MaterialTheme.colorScheme.primary)
-                            }
-                            IconButton(
-                                onClick = { imagePickerLauncher.launch("image/*") },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                            ) {
-                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Resim Ekle", tint = MaterialTheme.colorScheme.primary)
-                            }
-
-                            // Infinite Transition for Chromatic Neon Rainbow Color Shift
-                            val infiniteTransition = rememberInfiniteTransition(label = "color_shift")
-                            val phase by infiniteTransition.animateFloat(
-                                initialValue = 0f,
-                                targetValue = 360f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(durationMillis = 6000, easing = LinearEasing),
-                                    repeatMode = RepeatMode.Restart
-                                ),
-                                label = "phase"
-                            )
-
-                            // Generate smoothly shifting hue colors
-                            val color1 = Color.hsv(phase, 0.75f, 0.95f)
-                            val color2 = Color.hsv((phase + 120f) % 360f, 0.8f, 0.9f)
-                            val color3 = Color.hsv((phase + 240f) % 360f, 0.85f, 0.85f)
-
-                            Card(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(56.dp)
-                                    .clip(RoundedCornerShape(28.dp))
-                                    .clickable {
-                                        if (isListening) {
-                                            speechRecognizer.stopListening()
-                                            isListening = false
-                                        } else {
-                                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                        }
-                                    },
-                                shape = RoundedCornerShape(28.dp),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            brush = Brush.linearGradient(
-                                                colors = if (isListening) {
-                                                    listOf(Color(0xFFFF1744), Color(0xFFD500F9), Color(0xFFFF1744))
-                                                } else {
-                                                    listOf(color1, color2, color3)
-                                                }
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                                            contentDescription = "Bas Konuş",
-                                            tint = Color.Black,
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .graphicsLayer {
-                                                    if (isListening) {
-                                                        val scale = 1.15f + 0.15f * kotlin.math.sin(phase * Math.PI / 180f).toFloat()
-                                                        scaleX = scale
-                                                        scaleY = scale
-                                                    }
-                                                }
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = if (isListening) "Dinliyorum Bro... 🎙️" else "Bas Konuş Bro 👑",
-                                            color = Color.Black,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = "Gönder",
+                                        tint = if (inputText.isNotBlank() || selectedBitmap != null || selectedFile != null) Color(0xFF00FF00) else Color.Gray
+                                    )
                                 }
                             }
-                        }
+                        )
                     }
                 }
 
@@ -1693,7 +1585,7 @@ fun MessageBubble(
         contentAlignment = alignment
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(0.85f),
+            modifier = Modifier.fillMaxWidth(0.78f),
             horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
             verticalAlignment = Alignment.Bottom
         ) {
@@ -1705,7 +1597,7 @@ fun MessageBubble(
                 }
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .border(1.2.dp, currentBorderColor, CircleShape)
                         .background(Color(0xFF1E1B24))
@@ -1733,7 +1625,7 @@ fun MessageBubble(
                         contentScale = ContentScale.Crop,
                         alpha = 0.15f
                     )
-                    .padding(10.dp)
+                    .padding(8.dp)
             ) {
                 Column {
                     // Humor Level Badge & Reactive Emojis Row
@@ -1829,7 +1721,7 @@ fun MessageBubble(
                             Text(
                                 text = message.text,
                                 color = textColor,
-                                fontSize = 14.5.sp
+                                fontSize = 13.5.sp
                             )
                         }
                     }

@@ -224,6 +224,6 @@ class SettingsManager private constructor(context: Context) {
     private fun getSavedGundiAvatar(): String = prefs.getString("gundi_avatar", "classic") ?: "classic"
     private fun getSavedSpeechPitch(): Float = prefs.getFloat("speech_pitch", 1.0f)
     private fun getSavedVoiceStyle(): String = prefs.getString("voice_style", "classic") ?: "classic"
-    private fun getSavedStartupGreeting(): String = prefs.getString("startup_greeting", "Merhaba kralım, hoş geldin!") ?: "Merhaba kralım, hoş geldin!"
+    private fun getSavedStartupGreeting(): String = prefs.getString("startup_greeting", "Hoş geldin reisim Barış abim!") ?: "Hoş geldin reisim Barış abim!"
     private fun getSavedIsBubbleEnabled(): Boolean = prefs.getBoolean("is_bubble_enabled", false)
 }
