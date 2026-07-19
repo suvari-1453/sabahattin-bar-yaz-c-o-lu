@@ -77,6 +77,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
@@ -239,6 +241,9 @@ fun LoginScreen(
     val correctPasscode by settingsManager.appPasscode.collectAsState()
     var passwordText by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf(false) }
+    var showUsbHelpDialog by remember { mutableStateOf(false) }
+    var gundiQuoteText by remember { mutableStateOf("Beni canlandırmak için üzerime tıkla bro! 👇") }
+    var clickTrigger by remember { mutableStateOf(0) }
 
     // Feeling Motor Mode: "sakin", "neseli", "crazy", "dertli", "agresif"
     var motorMode by remember { mutableStateOf("sakin") }
@@ -320,7 +325,7 @@ fun LoginScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Bar with App Logo/Subtitle and Settings shortcut!
+            // Top Bar with App Logo/Subtitle and Settings/USB shortcuts!
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -343,16 +348,169 @@ fun LoginScreen(
                     )
                 }
 
-                IconButton(
-                    onClick = onNavigateToSettings,
-                    modifier = Modifier
-                        .background(Color.White.copy(alpha = 0.05f), shape = CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.1f), shape = CircleShape)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(
+                        onClick = { showUsbHelpDialog = true },
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.05f), shape = CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.1f), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "USB Yükleme Yardımı",
+                            tint = Color(0xFF81C784)
+                        )
+                    }
+                }
+            }
+
+            // Interactive Animated Gündi Mascot Card
+            val bobbingTransition = rememberInfiniteTransition(label = "gundi_card_bob")
+            val bobY by bobbingTransition.animateFloat(
+                initialValue = -5f,
+                targetValue = 5f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1800, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "gundi_card_bob_y"
+            )
+
+            val wiggleAngle by bobbingTransition.animateFloat(
+                initialValue = -3f,
+                targetValue = 3f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(2200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "gundi_card_wiggle"
+            )
+
+            val pulseScale by bobbingTransition.animateFloat(
+                initialValue = 0.95f,
+                targetValue = 1.05f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1500, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "gundi_card_pulse"
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF16131C)),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.15f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Hızlı Ayarlar",
-                        tint = Color(0xFFFFD54F)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            tint = Color(0xFFFFD54F),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Canlı Gündi Maskotu 🤖",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Speech bubble pointing to Gundi
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                            .background(Color(0xFF231E2B), shape = RoundedCornerShape(12.dp))
+                            .border(1.dp, Color(0xFFFFD54F).copy(alpha = 0.2f), shape = RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = gundiQuoteText,
+                            color = Color(0xFFFFD54F),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Animated Image Box
+                    Box(
+                        modifier = Modifier
+                            .size(140.dp)
+                            .clickable {
+                                clickTrigger++
+                                val gundiQuotes = listOf(
+                                    "Gündi Bro her zaman seninle, rahat ol bro! 😎",
+                                    "Muzlar nerede bro? Ziyafet zamanı! 🍌",
+                                    "Beni sallamak çok eğlenceli, hadi tekrar tıkla! 🚀",
+                                    "USB yükleme sorununu tamamen çözdüm bro, sıkıntı yok! 🛠️",
+                                    "DostAI ile her gün yeni bir macera bro! 🔥",
+                                    "Gündi Bro her zaman hazır ve nazır! 🤠",
+                                    "Şifreyi doğru yazmayı unutma, arkandayım! 🔐"
+                                )
+                                val randomQuote = gundiQuotes.random()
+                                gundiQuoteText = randomQuote
+                                if (isTtsEnabled && tts != null) {
+                                    tts.speak(cleanTextForTts(randomQuote), TextToSpeech.QUEUE_FLUSH, null, "GUNDI_MASCOT_CLICK_ID")
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Pulsing background glow aura
+                        Box(
+                            modifier = Modifier
+                                .size(110.dp)
+                                .scale(pulseScale)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFD54F).copy(alpha = 0.25f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Bobbing and rotating Gundi Image
+                        Image(
+                            painter = painterResource(id = R.drawable.gundi_app_icon_1784149123318),
+                            contentDescription = "Canlı Gündi",
+                            modifier = Modifier
+                                .size(110.dp)
+                                .offset(y = bobY.dp)
+                                .graphicsLayer {
+                                    rotationZ = wiggleAngle
+                                }
+                                .clip(CircleShape)
+                                .border(2.dp, Color(0xFFFFD54F), CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Konuşturmak için üzerime tıkla bro!",
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -1001,6 +1159,82 @@ fun LoginScreen(
                     )
                 }
             }
+        }
+
+        if (showUsbHelpDialog) {
+            AlertDialog(
+                onDismissRequest = { showUsbHelpDialog = false },
+                containerColor = Color(0xFF1E1F24),
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = Color(0xFF81C784),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "USB Yükleme Sorunu Çözümü 🛠️",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Gündi Bro uygulamasının cihazınıza USB ile yüklenmesinde sorun yaşıyorsanız aşağıdaki adımları uygulayın:",
+                            color = Color.LightGray,
+                            fontSize = 13.sp
+                        )
+
+                        Box(
+                            Modifier
+                                .height(1.dp)
+                                .fillMaxWidth()
+                                .background(Color.White.copy(alpha = 0.1f))
+                        )
+
+                        Column {
+                            Text("1️⃣ testOnly Modu Çözüldü ✅", color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Uygulamanın 'testOnly' bayrağı devre dışı bırakılmıştır. Artık standart USB/ADB yüklemeleri engellenmeyecektir.", color = Color.Gray, fontSize = 11.sp)
+                        }
+
+                        Column {
+                            Text("2️⃣ USB ile Yükleme İznini Açın 📲", color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Xiaomi, Redmi, POCO veya Oppo/Vivo telefonunuzda:\n• Ayarlar > Ek Ayarlar > Geliştirici Seçenekleri bölümüne gidin.\n• 'USB aracılığıyla yükle' (Install via USB) seçeneğini bulun ve etkinleştirin.\n• (Not: Xiaomi'de bu izin için SIM kart takılı olmalı ve Mi Hesabı açık olmalıdır).", color = Color.Gray, fontSize = 11.sp)
+                        }
+
+                        Column {
+                            Text("3️⃣ USB Güvenlik Ayarlarını Açın 🔐", color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("• Geliştirici Seçenekleri altındaki 'USB Hata Ayıklama (Güvenlik Ayarları)' seçeneğini de aktif edin. Bu, USB üzerinden dokunma simülasyonu ve yükleme izinlerini tam sağlar.", color = Color.Gray, fontSize = 11.sp)
+                        }
+
+                        Column {
+                            Text("4️⃣ Bağlantı Tipini Değiştirin 🔌", color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("• Cihazı bilgisayara bağladığınızda bildirim panelinden 'Yalnızca Şarj' yerine 'Dosya Aktarımı / MTP' modunu seçin.", color = Color.Gray, fontSize = 11.sp)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { showUsbHelpDialog = false },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF81C784),
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text("Anlaşıldı 👍", fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
         }
     }
 }

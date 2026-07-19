@@ -12,11 +12,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <attribution android:tag="speech" android:label="@string/app_name" />
-    <attribution android:tag="play-services-auth" android:label="@string/app_name" />
-    <attribution android:tag="play-services-location" android:label="@string/app_name" />
-    <attribution android:tag="firebase-analytics" android:label="@string/app_name" />
-    <attribution android:tag="default" android:label="@string/app_name" />
 
     <queries>
         <package android:name="com.whatsapp" />
