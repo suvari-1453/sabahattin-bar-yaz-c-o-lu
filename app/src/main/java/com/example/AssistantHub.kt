@@ -39,6 +39,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import android.widget.Toast
+import com.example.database.ChatDatabase
+import com.example.database.ChatRepository
+import com.example.database.ChatMessageEntity
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Send
 
 object AssistantHubState {
     var showAssistantHub by mutableStateOf(false)
@@ -65,11 +83,17 @@ data class AssistantReminder(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssistantHubDialog(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onGoToSession: ((String) -> Unit)? = null,
+    onSendImageToChat: ((Bitmap, String) -> Unit)? = null,
+    tts: android.speech.tts.TextToSpeech? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var selectedTab by remember { mutableStateOf(0) }
+    
+    val chatDb = remember { ChatDatabase.getDatabase(context) }
+    val chatRepo = remember { ChatRepository(chatDb.chatDao(), context) }
     
     // Persistent SharedPreferences for Tasks
     val prefs = remember { context.getSharedPreferences("assistant_hub_prefs", Context.MODE_PRIVATE) }
@@ -96,6 +120,11 @@ fun AssistantHubDialog(
                     if (r.secondsLeft == 0) {
                         r.isRunning = false
                         r.isFinished = true
+                        NotificationHelper.sendNotification(
+                            context = context,
+                            title = "Gundi Bro Hatırlatıcı! ⏰",
+                            message = "Süre bitti reisim: ${r.title}!"
+                        )
                     }
                     changed = true
                 }
@@ -185,7 +214,11 @@ fun AssistantHubDialog(
                         "🌐 Çevirmen" to 2,
                         "📄 Özetleyici" to 3,
                         "☀️ Hava Durumu" to 4,
-                        "☁️ Cloudflare" to 5
+                        "💾 Soru Geçmişi" to 5,
+                        "🎨 Görsel Üretici" to 6,
+                        "📂 Dosya Analizörü" to 7,
+                        "🎵 Arapça Yorumcu" to 8,
+                        "📊 SoundCloud" to 9
                     )
                     tabs.forEach { (title, index) ->
                         Tab(
@@ -223,7 +256,11 @@ fun AssistantHubDialog(
                         2 -> TranslatorTab()
                         3 -> SummarizerTab()
                         4 -> WeatherAssistantTab()
-                        5 -> CloudflareDnsTab()
+                        5 -> QaHistoryTab(chatRepo = chatRepo, onGoToSession = onGoToSession)
+                        6 -> ImagenGeneratorTab(onSendToChat = onSendImageToChat)
+                        7 -> FileAnalyzerTab(tts = tts)
+                        8 -> ArabicLyricsAnalyzerTab(tts = tts)
+                        9 -> SoundCloudDashboardTab()
                     }
                 }
             }
@@ -529,10 +566,25 @@ private fun saveTasksToPrefs(prefs: android.content.SharedPreferences, list: Lis
 fun RemindersTab(
     reminderList: MutableList<AssistantReminder>
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var reminderLabel by remember { mutableStateOf("") }
     var selectedMinutes by remember { mutableStateOf(1) }
     
     val minutePresets = listOf(1, 3, 5, 10, 15, 30)
+
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            NotificationHelper.sendNotification(
+                context,
+                "Gundi Bro'dan Bildirim Aktif! 🔔",
+                "Harika reisim! Artık hatırlatıcılar bittiğinde sana anında bildirim göndereceğim."
+            )
+        } else {
+            android.widget.Toast.makeText(context, "Bildirim izni verilmedi reisim!", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Card(
@@ -617,6 +669,48 @@ fun RemindersTab(
                             )
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Divider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.POST_NOTIFICATIONS
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            
+                            if (!hasPermission) {
+                                permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                NotificationHelper.sendNotification(
+                                    context,
+                                    "Gundi Bro Bildirim Testi 🔔",
+                                    "Yallah reisim! Bildirim sistemimiz canavar gibi çalışıyor!"
+                                )
+                            }
+                        } else {
+                            NotificationHelper.sendNotification(
+                                context,
+                                "Gundi Bro Bildirim Testi 🔔",
+                                "Yallah reisim! Bildirim sistemimiz canavar gibi çalışıyor!"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.NotificationsActive,
+                        contentDescription = "Test Notification",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Anlık Bildirim Test Et 🔔", color = Color.White, fontSize = 13.sp)
                 }
             }
         }
@@ -727,6 +821,7 @@ fun RemindersTab(
 // ==================== TAB 2: TRANSLATOR ====================
 @Composable
 fun TranslatorTab() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var inputText by remember { mutableStateOf("") }
     var translatedText by remember { mutableStateOf("") }
     var sourceLang by remember { mutableStateOf("Türkçe") }
@@ -841,7 +936,7 @@ fun TranslatorTab() {
                         errorMsg = null
                         translating = true
                         coroutineScope.launch {
-                            val res = callGeminiTranslate(inputText, sourceLang, targetLang)
+                            val res = callGeminiTranslate(inputText, sourceLang, targetLang, context)
                             translating = false
                             if (res != null) {
                                 translatedText = res
@@ -895,8 +990,8 @@ fun TranslatorTab() {
     }
 }
 
-private suspend fun callGeminiTranslate(text: String, source: String, target: String): String? = withContext(Dispatchers.IO) {
-    val apiKey = BuildConfig.GEMINI_API_KEY
+private suspend fun callGeminiTranslate(text: String, source: String, target: String, context: android.content.Context): String? = withContext(Dispatchers.IO) {
+    val apiKey = SettingsManager.getInstance(context).getActiveApiKey()
     if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY") {
         return@withContext null
     }
@@ -926,6 +1021,7 @@ private suspend fun callGeminiTranslate(text: String, source: String, target: St
 // ==================== TAB 3: SUMMARIZER ====================
 @Composable
 fun SummarizerTab() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var inputText by remember { mutableStateOf("") }
     var summaryResult by remember { mutableStateOf("") }
     var summarizing by remember { mutableStateOf(false) }
@@ -985,7 +1081,7 @@ fun SummarizerTab() {
                         errorMsg = null
                         summarizing = true
                         coroutineScope.launch {
-                            val res = callGeminiSummarize(inputText)
+                            val res = callGeminiSummarize(inputText, context)
                             summarizing = false
                             if (res != null) {
                                 summaryResult = res
@@ -1039,8 +1135,8 @@ fun SummarizerTab() {
     }
 }
 
-private suspend fun callGeminiSummarize(text: String): String? = withContext(Dispatchers.IO) {
-    val apiKey = BuildConfig.GEMINI_API_KEY
+private suspend fun callGeminiSummarize(text: String, context: android.content.Context): String? = withContext(Dispatchers.IO) {
+    val apiKey = SettingsManager.getInstance(context).getActiveApiKey()
     if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY") {
         return@withContext null
     }
@@ -1218,588 +1314,1479 @@ fun WeatherAssistantTab() {
     }
 }
 
-// ==================== TAB 5: CLOUDFLARE DNS MANAGEMENT ====================
+// ==================== TAB 5: QA HISTORY ====================
+
+data class QuestionAnswerPair(
+    val id: String,
+    val answerId: String,
+    val question: String,
+    val answer: String,
+    val timestamp: Long,
+    val sessionId: String
+)
+
 @Composable
-fun CloudflareDnsTab() {
+fun QaHistoryTab(
+    chatRepo: ChatRepository,
+    onGoToSession: ((String) -> Unit)? = null
+) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val token = BuildConfig.CLOUDFLARE_TOKEN
-    val zoneId = BuildConfig.CLOUDFLARE_ZONE_ID
-    val accountId = BuildConfig.CLOUDFLARE_ACCOUNT_ID
-
-    var records by remember { mutableStateOf<List<CloudflareRecord>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var actionLoading by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-    var successMsg by remember { mutableStateOf<String?>(null) }
-
-    // Form inputs
-    var newType by remember { mutableStateOf("A") }
-    var newName by remember { mutableStateOf("") }
-    var newContent by remember { mutableStateOf("") }
-    var newProxied by remember { mutableStateOf(true) }
-    var newTtl by remember { mutableStateOf(1) } // 1 is Automatic TTL in Cloudflare
-
-    val recordTypes = listOf("A", "AAAA", "CNAME", "TXT", "MX")
-
-    fun loadRecords() {
-        if (token.isBlank() || zoneId.isBlank() || token.startsWith("MY_") || token.startsWith("CLOUDFLARE_")) {
-            errorMsg = "Lütfen önce .env dosyasına geçerli Cloudflare kimlik bilgilerinizi girin!"
-            return
-        }
-        isLoading = true
-        errorMsg = null
-        coroutineScope.launch {
-            val fetched = CloudflareManager.fetchDnsRecords(token, zoneId)
-            records = fetched
-            isLoading = false
-            if (fetched.isEmpty()) {
-                errorMsg = "DNS kayıtları alınamadı veya liste boş. Lütfen API token ve Zone ID'nizi doğrulayın."
+    val clipboardManager = LocalClipboardManager.current
+    
+    val allMessages by chatRepo.allMessagesFlow.collectAsState(initial = emptyList())
+    
+    val qaPairs = remember(allMessages) {
+        groupMessagesToQaPairs(allMessages)
+    }
+    
+    var searchQuery by remember { mutableStateOf("") }
+    var expandedItemIds by remember { mutableStateOf(emptySet<String>()) }
+    
+    val filteredPairs = remember(qaPairs, searchQuery) {
+        if (searchQuery.isBlank()) {
+            qaPairs
+        } else {
+            qaPairs.filter {
+                it.question.contains(searchQuery, ignoreCase = true) ||
+                it.answer.contains(searchQuery, ignoreCase = true)
             }
         }
     }
+    
+    Column(modifier = Modifier.fillMaxSize()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Soru & Cevap Deposu",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    if (filteredPairs.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    filteredPairs.forEach { pair ->
+                                        chatRepo.deleteMessageById(pair.id)
+                                        if (pair.answerId.isNotBlank()) {
+                                            chatRepo.deleteMessageById(pair.answerId)
+                                        }
+                                    }
+                                    Toast.makeText(context, "Tüm soru geçmişi temizlendi! 🧹", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Tümünü Sil", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Sorularda veya cevaplarda ara...", color = Color.Gray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = "Ara", tint = Color.Gray)
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Temizle", tint = Color.Gray)
+                            }
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(14.dp))
+        
+        if (filteredPairs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = null,
+                        tint = Color.Gray.copy(alpha = 0.5f),
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = if (searchQuery.isNotEmpty()) "Aramanızla eşleşen soru-cevap bulunamadı." else "Henüz kayıtlı soru-cevap geçmişi bulunmuyor dostum!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(filteredPairs, key = { it.id }) { qa ->
+                    val isExpanded = expandedItemIds.contains(qa.id)
+                    
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                expandedItemIds = if (isExpanded) {
+                                    expandedItemIds - qa.id
+                                } else {
+                                    expandedItemIds + qa.id
+                                }
+                            },
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.02f)),
+                        border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChatBubble,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFFD54F),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = formatQaTimestamp(qa.timestamp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.Gray
+                                    )
+                                }
+                                
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (onGoToSession != null) {
+                                        IconButton(
+                                            onClick = { onGoToSession(qa.sessionId) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowForward,
+                                                contentDescription = "Sohbete Git",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    
+                                    IconButton(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                chatRepo.deleteMessageById(qa.id)
+                                                if (qa.answerId.isNotBlank()) {
+                                                    chatRepo.deleteMessageById(qa.answerId)
+                                                }
+                                                Toast.makeText(context, "Soru-cevap silindi.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Sil",
+                                            tint = Color.Gray.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(6.dp))
+                            
+                            Text(
+                                text = qa.question,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = if (isExpanded) Int.MAX_VALUE else 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            
+                            if (isExpanded) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "🤖 GUNDİ Bro:",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    
+                                    IconButton(
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(qa.answer))
+                                            Toast.makeText(context, "Cevap panoya kopyalandı! 📋", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = "Kopyala",
+                                            tint = Color.LightGray,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(6.dp))
+                                
+                                Text(
+                                    text = qa.answer,
+                                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                                    color = Color.White.copy(alpha = 0.9f)
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Cevabı göster...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-    LaunchedEffect(Unit) {
-        loadRecords()
+fun groupMessagesToQaPairs(messages: List<com.example.database.ChatMessageEntity>): List<QuestionAnswerPair> {
+    val pairs = mutableListOf<QuestionAnswerPair>()
+    val groupedBySession = messages.groupBy { it.sessionId }
+    
+    for ((sessionId, sessionMsgs) in groupedBySession) {
+        val sortedMsgs = sessionMsgs.sortedBy { it.timestamp }
+        var i = 0
+        while (i < sortedMsgs.size) {
+            val current = sortedMsgs[i]
+            if (current.isUser) {
+                var answerText = "Cevap yükleniyor veya bulunamadı..."
+                var answerMsgId = ""
+                if (i + 1 < sortedMsgs.size) {
+                    val next = sortedMsgs[i + 1]
+                    if (!next.isUser) {
+                        answerText = next.text
+                        answerMsgId = next.id
+                        i += 2
+                    } else {
+                        i += 1
+                    }
+                } else {
+                    i += 1
+                }
+                
+                pairs.add(
+                    QuestionAnswerPair(
+                        id = current.id,
+                        answerId = answerMsgId,
+                        question = current.text,
+                        answer = answerText,
+                        timestamp = current.timestamp,
+                        sessionId = sessionId
+                    )
+                )
+            } else {
+                i += 1
+            }
+        }
+    }
+    return pairs.sortedByDescending { it.timestamp }
+}
+
+fun formatQaTimestamp(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale("tr", "TR"))
+    return sdf.format(java.util.Date(timestamp))
+}
+
+@Composable
+fun ImagenGeneratorTab(
+    onSendToChat: ((Bitmap, String) -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    
+    var promptText by remember { mutableStateOf("") }
+    var selectedAspectRatio by remember { mutableStateOf("1:1") }
+    
+    var isGenerating by remember { mutableStateOf(false) }
+    var generatedImage by remember { mutableStateOf<Bitmap?>(null) }
+    
+    // Funny loading messages list
+    val loadingMessages = remember {
+        listOf(
+            "GUNDİ Bro fırını ısıtıyor, boyaları karıştırıyor kanka... 🎨🔥",
+            "Piksel piksel sanat eseri dokuyorum, bekle azıcık şef! ⚡🧠",
+            "İşlemcim şu an senin hayalini çiziyor, efsane bir şey geliyor! 🌌🚀",
+            "Tuval hazırlandı, fırça darbeleri vuruluyor... Az sabret başkan! 🖌️💎",
+            "Gündi badin sana kurban olsun, resim fırından taze taze çıkıyor... 🍕✨"
+        )
+    }
+    var currentLoadingMessageIndex by remember { mutableStateOf(0) }
+    
+    // Periodically change the loading message when generating
+    LaunchedEffect(isGenerating) {
+        if (isGenerating) {
+            currentLoadingMessageIndex = 0
+            while (isGenerating) {
+                delay(3000)
+                currentLoadingMessageIndex = (currentLoadingMessageIndex + 1) % loadingMessages.size
+            }
+        }
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(4.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "Yapay Zeka Görsel Sihirbazı",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Hayalindeki görseli kelimelere dök, GUNDİ Bro senin için anında çizsin!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray.copy(alpha = 0.8f)
+                )
+                
+                Spacer(modifier = Modifier.height(14.dp))
+                
+                OutlinedTextField(
+                    value = promptText,
+                    onValueChange = { promptText = it },
+                    placeholder = { Text("Örn: Astronot kedi uzayda çay içiyor, neon siberpunk tarzı...", color = Color.Gray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Text(
+                    text = "En-Boy Oranı (Aspect Ratio)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val aspectRatios = listOf("1:1", "16:9", "4:3", "9:16")
+                    aspectRatios.forEach { ratio ->
+                        val isSelected = selectedAspectRatio == ratio
+                        val containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent
+                        val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f)
+                        val textColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray
+                        
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(containerColor)
+                                .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+                                .clickable { selectedAspectRatio = ratio },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = ratio,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Button(
+                    onClick = {
+                        if (promptText.isBlank()) {
+                            Toast.makeText(context, "Lütfen bir hayal/prompt yaz kanka!", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        
+                        isGenerating = true
+                        coroutineScope.launch {
+                            try {
+                                val apiKey = SettingsManager.getInstance(context).getActiveApiKey()
+                                val isPlaceholder = apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY"
+                                
+                                if (isPlaceholder) {
+                                    Toast.makeText(context, "API Anahtarı bulunamadı! Secrets panelini kontrol et.", Toast.LENGTH_LONG).show()
+                                    isGenerating = false
+                                    return@launch
+                                }
+                                
+                                var imageBmp: Bitmap? = null
+                                try {
+                                    val imagenRequest = ImagenRequest(
+                                        prompt = promptText,
+                                        numberOfImages = 1,
+                                        aspectRatio = selectedAspectRatio,
+                                        outputMimeType = "image/jpeg"
+                                    )
+                                    val response = withContext(Dispatchers.IO) {
+                                        RetrofitClient.service.generateImagen3(apiKey, imagenRequest)
+                                    }
+                                    val imageBytesBase64 = response.generatedImages?.firstOrNull()?.image?.imageBytes
+                                    if (imageBytesBase64 != null) {
+                                        val bytes = Base64.decode(imageBytesBase64, Base64.DEFAULT)
+                                        imageBmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                    }
+                                } catch (ex: Exception) {
+                                    ex.printStackTrace()
+                                    
+                                    val request = GenerateContentRequest(
+                                        contents = listOf(Content(parts = listOf(Part(text = promptText)))),
+                                        generationConfig = GenerationConfig(
+                                            imageConfig = ImageConfig(aspectRatio = selectedAspectRatio, imageSize = "1K"),
+                                            responseModalities = listOf("TEXT", "IMAGE")
+                                        )
+                                    )
+                                    
+                                    val response = withContext(Dispatchers.IO) {
+                                        RetrofitClient.service.generateImage(apiKey, request)
+                                    }
+                                    
+                                    val responseParts = response.candidates?.firstOrNull()?.content?.parts
+                                    if (responseParts != null) {
+                                        for (part in responseParts) {
+                                            if (part.inlineData != null) {
+                                                val base64Data = part.inlineData.data
+                                                val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+                                                imageBmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                                break
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if (imageBmp != null) {
+                                    generatedImage = imageBmp
+                                } else {
+                                    Toast.makeText(context, "Görsel verisi alınamadı. Başka bir prompt dene kanka.", Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                val msgText = e.message ?: ""
+                                val isAuthOrForbidden = (e is retrofit2.HttpException && (e.code() == 401 || e.code() == 403)) ||
+                                        msgText.contains("401", ignoreCase = true) || msgText.contains("403", ignoreCase = true) ||
+                                        msgText.contains("Unauthorized", ignoreCase = true) || msgText.contains("Forbidden", ignoreCase = true)
+                                val finalMsg = if (isAuthOrForbidden) {
+                                    "Hata (401/403): Gemini API Key geçersiz veya yetkisiz! Lütfen Secrets panelinden anahtarınızı güncelleyin."
+                                } else {
+                                    "Hata oluştu: ${e.message}"
+                                }
+                                Toast.makeText(context, finalMsg, Toast.LENGTH_LONG).show()
+                            } finally {
+                                isGenerating = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isGenerating,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = if (isGenerating) "Çiziliyor..." else "Görseli Oluştur! ✨", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        if (isGenerating) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.02f)),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = loadingMessages[currentLoadingMessageIndex],
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            }
+        } else {
+            generatedImage?.let { bmp ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.02f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "Oluşturulan Başyapıt 👑",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(
+                                    when (selectedAspectRatio) {
+                                        "16:9" -> 16f / 9f
+                                        "4:3" -> 4f / 3f
+                                        "9:16" -> 9f / 16f
+                                        else -> 1f
+                                    }
+                                )
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = "Oluşturulan Görsel",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(14.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Save to Gallery button
+                            OutlinedButton(
+                                onClick = {
+                                    val promptClean = promptText.take(15).replace("[^a-zA-Z0-9]".toRegex(), "_")
+                                    val filename = "gundi_${promptClean}_${System.currentTimeMillis()}"
+                                    val uri = saveImageToStorage(context, bmp, filename)
+                                    if (uri != null) {
+                                        Toast.makeText(context, "Görsel Galeriye/Pictures klasörüne kaydedildi! 💾🎉", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "Kaydetme başarısız oldu.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Kaydet", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                            }
+                            
+                            // Send to Chat button
+                            if (onSendToChat != null) {
+                                Button(
+                                    onClick = {
+                                        onSendToChat(bmp, "Oluşturduğun görsel: \"$promptText\"")
+                                    },
+                                    modifier = Modifier.weight(1.2f),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Sohbete Aktar", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun saveImageToStorage(context: android.content.Context, bitmap: Bitmap, name: String): android.net.Uri? {
+    val contentValues = android.content.ContentValues().apply {
+        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "$name.jpg")
+        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Gundi")
+            put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+    }
+    val resolver = context.contentResolver
+    val imageUri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+    if (imageUri != null) {
+        try {
+            resolver.openOutputStream(imageUri)?.use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(imageUri, contentValues, null, null)
+            }
+            return imageUri
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    return null
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FileAnalyzerTab(tts: android.speech.tts.TextToSpeech? = null) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    var selectedFileUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var selectedFileName by remember { mutableStateOf("") }
+    var selectedFileMime by remember { mutableStateOf("") }
+    var selectedFileBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var customPrompt by remember { mutableStateOf("Bu dosyanın ses/görüntü içeriğini analiz et, en önemli noktaları özetle ve bana Gundi Bro tarzı esprili bir değerlendirme raporu sun reisim!") }
+    
+    var analysisResult by remember { mutableStateOf("") }
+    var analyzing by remember { mutableStateOf(false) }
+    var isTtsSpeaking by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    // File picker launcher
+    val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            val mime = context.contentResolver.getType(it) ?: "application/octet-stream"
+            val name = getFileNameHelper(context, it)
+            val ext = name.substringAfterLast('.', "").lowercase()
+            
+            // Check file eligibility (MP3, WAV, MP4 or matching MIME types)
+            val isAllowed = ext in listOf("mp3", "wav", "mp4") || 
+                            mime.startsWith("audio/") || 
+                            mime == "video/mp4"
+                            
+            if (!isAllowed) {
+                errorMsg = "Lütfen sadece MP3, WAV veya MP4 formatında bir dosya seç reisim! 🎧🎬"
+                return@rememberLauncherForActivityResult
+            }
+
+            try {
+                val bytes = context.contentResolver.openInputStream(it)?.readBytes()
+                if (bytes != null) {
+                    // Check file size (e.g. limit to 15MB to prevent memory issues)
+                    if (bytes.size > 15 * 1024 * 1024) {
+                        errorMsg = "Dosya boyutu çok büyük reisim! Maksimum 15MB yükleyebilirsin."
+                        return@rememberLauncherForActivityResult
+                    }
+                    selectedFileUri = it
+                    selectedFileName = name
+                    selectedFileMime = mime
+                    selectedFileBytes = bytes
+                    errorMsg = null
+                } else {
+                    errorMsg = "Dosya okunamadı reisim!"
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                errorMsg = "Dosya yüklenirken hata oluştu: ${e.message}"
+            }
+        }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .padding(4.dp)
     ) {
-        // Domain Info Card
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Gundi Bro Medya Analizörü 🎧🎬",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFFFFD54F),
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "MP3, WAV ses dosyalarını veya MP4 videolarını buraya yükleyip analiz ettirebilirsin. Gundi Bro dosyanın sesini/görüntüsünü inceleyip sana özel esprili bir analiz hazırlasın!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // File Upload Box / Dashboard
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .background(Color.White.copy(alpha = 0.02f), RoundedCornerShape(12.dp))
+                        .border(
+                            BorderStroke(
+                                1.5.dp, 
+                                Brush.sweepGradient(listOf(Color(0xFFFFD54F), Color(0xFF4285F4)))
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable { filePickerLauncher.launch("*/*") },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column {
-                        Text(
-                            text = "Aktif Alan Adı: gundi.com 👑",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFFD54F)
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Cloudflare Entegrasyonu",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                    }
-                    IconButton(
-                        onClick = { loadRecords() },
-                        modifier = Modifier.testTag("refresh_dns_button")
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Yenile", tint = MaterialTheme.colorScheme.primary)
+                    if (selectedFileUri == null) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Upload,
+                                contentDescription = null,
+                                tint = Color(0xFFFFD54F),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "Bir Dosya Seç (MP3, WAV, MP4)",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                "Maksimum 15MB • Tıkla ve Yükle",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                        }
+                    } else {
+                        // Display information of selected file
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isVideo = selectedFileMime.startsWith("video/") || selectedFileName.lowercase().endsWith(".mp4")
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(
+                                        if (isVideo) Color(0xFF7C4DFF).copy(alpha = 0.2f) else Color(0xFF00E676).copy(alpha = 0.2f),
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.InsertDriveFile,
+                                    contentDescription = null,
+                                    tint = if (isVideo) Color(0xFFB388FF) else Color(0xFF69F0AE),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = selectedFileName,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${selectedFileMime.uppercase()} • ${(selectedFileBytes?.size ?: 0) / 1024} KB",
+                                    color = Color.Gray,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    selectedFileUri = null
+                                    selectedFileName = ""
+                                    selectedFileMime = ""
+                                    selectedFileBytes = null
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Temizle",
+                                    tint = Color.LightGray
+                                )
+                            }
+                        }
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = Color.White.copy(alpha = 0.08f))
+                if (errorMsg != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = errorMsg!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
-                // Account / Zone Details
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Bölge Kimliği (Zone ID)", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            text = if (zoneId.length > 8) zoneId.take(8) + "..." + zoneId.takeLast(6) else zoneId,
-                            fontSize = 12.sp,
-                            color = Color.White,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Hesap Kimliği (Account ID)", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            text = if (accountId.length > 8) accountId.take(8) + "..." + accountId.takeLast(6) else accountId,
-                            fontSize = 12.sp,
-                            color = Color.White,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                        )
+                if (selectedFileUri != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Gundi Bro'ya Talimat Ver (İsteğe Bağlı):",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = customPrompt,
+                        onValueChange = { customPrompt = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFFFD54F),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            val bytes = selectedFileBytes
+                            if (bytes == null) {
+                                errorMsg = "Dosya verisi bulunamadı!"
+                                return@Button
+                            }
+                            analyzing = true
+                            errorMsg = null
+                            coroutineScope.launch {
+                                val result = callGeminiFileAnalysis(
+                                    fileBytes = bytes,
+                                    mimeType = selectedFileMime,
+                                    fileName = selectedFileName,
+                                    customPrompt = customPrompt,
+                                    context = context
+                                )
+                                analyzing = false
+                                if (result != null) {
+                                    analysisResult = result
+                                } else {
+                                    errorMsg = "Bağlantı hatası oluştu reisim! Tekrar dene."
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD54F)),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !analyzing
+                    ) {
+                        if (analyzing) {
+                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Gundi Bro Dosyayı İnceliyor...", color = Color.Black, fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = Color.Black)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Gundi Tarzıyla Analiz Et 🔥", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
 
-        // Apply Reisin Şablonu (Predefined Records Quick Action)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
-            border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.2f)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD54F), modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Barış Abimin DNS Şablonu 👑",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Gözlerin yollarda kalmasın! gundi.com için A, CNAME, MX ve TXT kayıtlarını tek bir tıkla otomatik olarak Cloudflare üzerinde yapılandırabilirsin.",
-                    fontSize = 12.sp,
-                    color = Color.LightGray
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    onClick = {
-                        actionLoading = true
-                        successMsg = null
-                        errorMsg = null
-                        coroutineScope.launch {
-                            // Define Baris Abi's predefined records
-                            val templateRecords = listOf(
-                                Triple("A", "gundi.com", "216.168.96.50"),
-                                Triple("A", "mail.gundi.com", "216.168.96.50"),
-                                Triple("A", "webmail.gundi.com", "216.168.96.50"),
-                                Triple("CNAME", "ftp.gundi.com", "gundi.com"),
-                                Triple("CNAME", "www.gundi.com", "gundi.com"),
-                                Triple("MX", "gundi.com", "10 mail.gundi.com"),
-                                Triple("TXT", "gundi.com", "v=spf1 +a +mx -all")
-                            )
-
-                            var createdCount = 0
-                            for (rec in templateRecords) {
-                                // Check if already exists to prevent duplicate
-                                val exists = records.any { it.type == rec.first && it.name.contains(rec.second) }
-                                if (!exists) {
-                                    val success = CloudflareManager.createDnsRecord(
-                                        token = token,
-                                        zoneId = zoneId,
-                                        type = rec.first,
-                                        name = rec.second,
-                                        content = rec.third,
-                                        ttl = 1,
-                                        proxied = rec.first == "A" || rec.first == "CNAME"
+        if (analysisResult.isNotBlank()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📊 Gündi Bro Analiz Raporu",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFFFFD54F),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row {
+                            // Copy button
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(analysisResult))
+                                    Toast.makeText(context, "Analiz panoya kopyalandı! 📋", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Kopyala",
+                                    tint = Color.LightGray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            
+                            // TTS Speak button
+                            if (tts != null) {
+                                IconButton(
+                                    onClick = {
+                                        if (isTtsSpeaking) {
+                                            tts.stop()
+                                            isTtsSpeaking = false
+                                        } else {
+                                            isTtsSpeaking = true
+                                            val cleanText = cleanTextForTts(analysisResult)
+                                            tts.speak(
+                                                cleanText,
+                                                android.speech.tts.TextToSpeech.QUEUE_FLUSH,
+                                                null,
+                                                "FILE_ANALYSIS_TTS"
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                        contentDescription = "Sesli Oku",
+                                        tint = Color(0xFFFFD54F),
+                                        modifier = Modifier.size(20.dp)
                                     )
-                                    if (success) createdCount++
                                 }
                             }
-                            actionLoading = false
-                            if (createdCount > 0) {
-                                successMsg = "$createdCount adet şablon DNS kaydı başarıyla oluşturuldu reisim!"
-                                loadRecords()
-                            } else {
-                                successMsg = "Şablon kayıtlar zaten mevcut veya eklenemedi!"
-                            }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = analysisResult,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Private helper inside AssistantHub to avoid conflict or name duplication
+private fun getFileNameHelper(context: android.content.Context, uri: android.net.Uri): String {
+    var result: String? = null
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        try {
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (index != -1) {
+                    result = cursor.getString(index)
+                }
+            }
+        } finally {
+            cursor?.close()
+        }
+    }
+    if (result == null) {
+        result = uri.path
+        val cut = result?.lastIndexOf('/') ?: -1
+        if (cut != -1) {
+            result = result?.substring(cut + 1)
+        }
+    }
+    return result ?: "file"
+}
+
+private suspend fun callGeminiFileAnalysis(
+    fileBytes: ByteArray,
+    mimeType: String,
+    fileName: String,
+    customPrompt: String,
+    context: android.content.Context
+): String? = withContext(Dispatchers.IO) {
+    val apiKey = SettingsManager.getInstance(context).getActiveApiKey()
+    if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY") {
+        return@withContext "Gundi hatası: API anahtarı ayarlanmamış reisim! Ayarlardan API anahtarını girip tekrar dene."
+    }
+
+    // Prepare system instruction or custom prompt
+    val basePrompt = """
+        Sen GUNDI Bro'sun, DJ BYMIX'in kankası ve en yakın dostusun.
+        Sana gönderilen bu medya dosyasını (${fileName}) baştan sona incele ve analiz et.
+        Dosya tipi: ${mimeType}.
+        
+        Kullanıcı isteği: "${customPrompt}"
+        
+        Lütfen cevabını şu formatta, samimi, esprili, yer yer "REİSİM", "BRO" diyerek sun:
+        
+        🎵 **Gundi Bro Medya Değerlendirmesi**:
+        - Dosyanın içeriği hakkında ne gördüğünü/duyduğunu özetle.
+        - İlgi çekici, eğlenceli veya sanatsal açıdan dikkat çeken kısımları belirt.
+        
+        ⚡ **Gundi Bro'nun Çılgın Tavsiyesi**:
+        - DJ BYMIX tarzında bu dosya ile ne yapabileceğine dair komik ve yaratıcı bir tavsiye ver.
+        
+        Her zaman Türkçe konuş ve eğlenceli, enerjik ol!
+    """.trimIndent()
+
+    val fileBase64 = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
+    val request = GenerateContentRequest(
+        contents = listOf(
+            Content(
+                parts = listOf(
+                    Part(inlineData = InlineData(mimeType = mimeType, data = fileBase64)),
+                    Part(text = basePrompt)
+                )
+            )
+        )
+    )
+
+    try {
+        val response = RetrofitClient.service.generateContent(apiKey, request)
+        response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+    } catch (e: Exception) {
+        e.printStackTrace()
+        "Analiz sırasında bir hata oluştu reisim! Hata detayı: ${e.message}"
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ArabicLyricsAnalyzerTab(tts: android.speech.tts.TextToSpeech? = null) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    var lyricsInput by remember { mutableStateOf("") }
+    var interpretationResult by remember { mutableStateOf("") }
+    var analyzing by remember { mutableStateOf(false) }
+    var selectedTone by remember { mutableStateOf("Damar / Duygusal Mod 🥺") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    var isTtsSpeaking by remember { mutableStateOf(false) }
+
+    val tones = listOf(
+        "Damar / Duygusal Mod 🥺",
+        "Coşkulu / Halay Modu 🔥",
+        "Edebi / Filozof Gundi 😎"
+    )
+
+    val sampleLyrics = listOf(
+        Triple(
+            "Habibi Ya Nour El Ain",
+            "Amr Diab",
+            "Habibi ya nour el ain\nYa sakin khayali\nAsheq bakali senin\nW'la gheyrak fi bali"
+        ),
+        Triple(
+            "Tamally Ma'ak",
+            "Amr Diab",
+            "Tamally ma'ak\nWe low hata b'eed 'anny, f'alby hawak\nTamally ma'ak\nTamally fi baly we fe Alby, wala bansak"
+        ),
+        Triple(
+            "Sidi Mansour",
+            "Saber Rebai",
+            "Sidi Mansour ya baba\nWe nalehek ya baba\nAl-ashraf ya baba\nSidi Mansour ya baba"
+        )
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(4.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Arapça Şarkı Sözü Analizi ve Yorumu 🕌🎵",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFFFFD54F),
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Arapça şarkı sözlerini veya parçasını buraya yapıştır reisim! Gundi Bro sözleri senin için Türkçeye çevirsin, içindeki derin felsefeyi ve duyguları kendi tarzında esprili ve samimi bir şekilde yorumlasın.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Input Field
+                OutlinedTextField(
+                    value = lyricsInput,
+                    onValueChange = { lyricsInput = it },
+                    placeholder = { 
+                        Text(
+                            "Yallah reisim, yorumlanacak Arapça şarkı sözlerini buraya yapıştır veya bir parça ismi yaz...", 
+                            color = Color.Gray,
+                            fontSize = 13.sp
+                        ) 
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("apply_template_button"),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD54F)),
-                    shape = RoundedCornerShape(10.dp),
-                    enabled = !actionLoading && !isLoading
-                ) {
-                    if (actionLoading) {
-                        CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(18.dp))
-                    } else {
-                        Text("Şablonu Otomatik Kur (Gözüm Kapalı) 🚀", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-
-        // Message Banners
-        if (errorMsg != null) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F).copy(alpha = 0.1f)),
-                border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.3f))
-            ) {
-                Text(
-                    text = errorMsg!!,
-                    color = Color(0xFFEF5350),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(10.dp),
-                    fontWeight = FontWeight.Medium
+                        .height(120.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFFFD54F),
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
                 )
-            }
-        }
 
-        if (successMsg != null) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF388E3C).copy(alpha = 0.1f)),
-                border = BorderStroke(1.dp, Color(0xFF388E3C).copy(alpha = 0.3f))
-            ) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Tone selection chips
                 Text(
-                    text = successMsg!!,
-                    color = Color(0xFF81C784),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(10.dp),
-                    fontWeight = FontWeight.Medium
+                    "Gundi Yorumlama Tonu:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.Gray
                 )
-            }
-        }
-
-        // Add DNS Record Form
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = "Yeni DNS Kaydı Oluştur",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Type selector row
-                Text("Kayıt Türü", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    recordTypes.forEach { type ->
-                        val isSelected = newType == type
+                    tones.forEach { tone ->
+                        val isSelected = selectedTone == tone
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.05f))
-                                .clickable { newType = type }
-                                .padding(vertical = 8.dp),
+                                .background(if (isSelected) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.05f))
+                                .clickable { selectedTone = tone }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = type,
+                                text = tone.substringBefore(" "),
                                 color = if (isSelected) Color.Black else Color.White,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Name & Content fields
-                OutlinedTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    label = { Text("İsim (örn: www veya @)", color = Color.Gray) },
-                    placeholder = { Text("gundi.com", color = Color.DarkGray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
-                    )
+                // Quick Examples
+                Text(
+                    "Popüler Arapça Şarkı Örnekleri (Tıkla ve Yapıştır):",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.Gray
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = newContent,
-                    onValueChange = { newContent = it },
-                    label = { Text("İçerik (örn: IP adresi veya Hedef)", color = Color.Gray) },
-                    placeholder = { Text("216.168.96.50", color = Color.DarkGray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Proxied and TTL row
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Proxied switch (A / CNAME only)
-                    if (newType == "A" || newType == "CNAME") {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Checkbox(
-                                checked = newProxied,
-                                onCheckedChange = { newProxied = it },
-                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                            )
-                            Column {
-                                Text("Vekil Sunucu (Proxied)", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
-                                Text("Cloudflare koruması aktif", fontSize = 10.sp, color = Color.Gray)
-                            }
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-
-                    // TTL Indicator
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("TTL", fontSize = 11.sp, color = Color.Gray)
+                    sampleLyrics.forEach { sample ->
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color.White.copy(alpha = 0.05f))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.02f))
+                                .clickable {
+                                    lyricsInput = sample.third
+                                    Toast.makeText(context, "${sample.first} seçildi reisim! 😉", Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("Otomatik (Auto)", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = sample.first,
+                                    color = Color(0xFFFFD54F),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = sample.second,
+                                    color = Color.Gray,
+                                    fontSize = 9.sp,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Submit Button
+                if (errorMsg != null) {
+                    Text(
+                        text = errorMsg!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 10.dp)
+                    )
+                }
+
+                // Analyze Button
                 Button(
                     onClick = {
-                        if (newName.isBlank() || newContent.isBlank()) {
-                            errorMsg = "Lütfen isim ve içerik alanlarını doldurun reisim!"
+                        if (lyricsInput.isBlank()) {
+                            errorMsg = "Lütfen önce Arapça şarkı sözlerini gir reisim!"
                             return@Button
                         }
-                        actionLoading = true
                         errorMsg = null
-                        successMsg = null
+                        analyzing = true
                         coroutineScope.launch {
-                            val success = CloudflareManager.createDnsRecord(
-                                token = token,
-                                zoneId = zoneId,
-                                type = newType,
-                                name = newName,
-                                content = newContent,
-                                ttl = newTtl,
-                                proxied = newProxied
-                            )
-                            actionLoading = false
-                            if (success) {
-                                successMsg = "DNS kaydı başarıyla eklendi!"
-                                newName = ""
-                                newContent = ""
-                                loadRecords()
+                            val result = callGeminiArabicLyricsAnalysis(lyricsInput, selectedTone, context)
+                            analyzing = false
+                            if (result != null) {
+                                interpretationResult = result
                             } else {
-                                errorMsg = "DNS kaydı oluşturulamadı. Cloudflare API hata döndürdü."
+                                errorMsg = "Bağlantı hatası oluştu reisim! Tekrar dene."
                             }
                         }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("add_dns_button"),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD54F)),
                     shape = RoundedCornerShape(10.dp),
-                    enabled = !actionLoading && !isLoading
+                    enabled = !analyzing
                 ) {
-                    if (actionLoading) {
-                        CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(18.dp))
+                    if (analyzing) {
+                        CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Gundi Bro Derin Düşüncelerde...", color = Color.Black, fontWeight = FontWeight.Bold)
                     } else {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("DNS Kaydını Kaydet 💾", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = Color.Black)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Gundi Tarzıyla Yorumla 🔥", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
-        // Records List Title
-        Text(
-            text = "Kayıtlı DNS Kayıtları (${records.size})",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.LightGray,
-            modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp)
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        if (isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp),
-                contentAlignment = Alignment.Center
+        if (interpretationResult.isNotBlank()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            }
-        } else if (records.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 30.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.CloudQueue, contentDescription = null, modifier = Modifier.size(44.dp), tint = Color.Gray)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Hiç aktif kayıt bulunamadı.", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        } else {
-            // LazyColumn replacement inside scrollable tab with Column + forEach to prevent nested scroll crashes
-            records.forEach { record ->
-                val recordColor = when (record.type) {
-                    "A" -> Color(0xFF81C784)
-                    "CNAME" -> Color(0xFF64B5F6)
-                    "TXT" -> Color(0xFFBA68C8)
-                    "MX" -> Color(0xFFFFD54F)
-                    else -> Color.White
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.02f))
-                        .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Badge
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(recordColor.copy(alpha = 0.12f))
-                                .border(1.2.dp, recordColor.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = record.type,
-                                fontSize = 11.sp,
-                                color = recordColor,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = record.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                        Text(
+                            text = "👳🏽‍♂️ Gündi Bro'nun Şarkı Yorumu",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFFFFD54F),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row {
+                            // Copy button
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(interpretationResult))
+                                    Toast.makeText(context, "Yorum panoya kopyalandı! 📋", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Kopyala",
+                                    tint = Color.LightGray,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-
-                                // Proxied badge ☁️
-                                if (record.proxied) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(Color(0xFFF57C00).copy(alpha = 0.15f))
-                                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Cloud,
-                                                contentDescription = "Proxied",
-                                                tint = Color(0xFFFFB74D),
-                                                modifier = Modifier.size(10.dp)
-                                            )
-                                            Text(
-                                                "Proxied",
-                                                fontSize = 8.sp,
-                                                color = Color(0xFFFFB74D),
-                                                fontWeight = FontWeight.Bold
+                            }
+                            
+                            // TTS Speak button
+                            if (tts != null) {
+                                IconButton(
+                                    onClick = {
+                                        if (isTtsSpeaking) {
+                                            tts.stop()
+                                            isTtsSpeaking = false
+                                        } else {
+                                            isTtsSpeaking = true
+                                            val cleanText = cleanTextForTts(interpretationResult)
+                                            tts.speak(
+                                                cleanText,
+                                                android.speech.tts.TextToSpeech.QUEUE_FLUSH,
+                                                null,
+                                                "ARABIC_LYRICS_TTS"
                                             )
                                         }
                                     }
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(Color.White.copy(alpha = 0.08f))
-                                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            "DNS Only",
-                                            fontSize = 8.sp,
-                                            color = Color.Gray,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                        contentDescription = "Sesli Oku",
+                                        tint = Color(0xFFFFD54F),
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                             }
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Text(
-                                text = record.content,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.LightGray,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                            )
                         }
                     }
 
-                    // Delete Record Action
-                    IconButton(
-                        onClick = {
-                            actionLoading = true
-                            errorMsg = null
-                            successMsg = null
-                            coroutineScope.launch {
-                                val success = CloudflareManager.deleteDnsRecord(token, zoneId, record.id)
-                                actionLoading = false
-                                if (success) {
-                                    successMsg = "DNS kaydı başarıyla silindi reisim!"
-                                    loadRecords()
-                                } else {
-                                    errorMsg = "Kayıt silinemedi. Cloudflare API hata döndürdü."
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .testTag("delete_record_${record.id}")
-                            .size(36.dp),
-                        enabled = !actionLoading
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Sil",
-                            tint = Color.Gray.copy(alpha = 0.8f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = interpretationResult,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp
+                    )
                 }
             }
         }
+    }
+}
+
+private suspend fun callGeminiArabicLyricsAnalysis(lyrics: String, tone: String, context: android.content.Context): String? = withContext(Dispatchers.IO) {
+    val apiKey = SettingsManager.getInstance(context).getActiveApiKey()
+    if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY") {
+        return@withContext "Gundi hatası: API anahtarı ayarlanmamış reisim! Ayarlardan API anahtarını girip tekrar dene."
+    }
+
+    val prompt = """
+        Sen GUNDI Bro'sun, DJ BYMIX'in kankası ve en samimi dostusun. 
+        Bir kullanıcı sana Arapça şarkı sözleri (veya şarkı bilgisi) gönderdi.
+        
+        Sözler:
+        "$lyrics"
+        
+        İstenen Gundi Bro Yorumlama Modu: "$tone"
+        
+        Lütfen bu Arapça şarkı sözlerini Türkçeye son derece samimi ve doğru bir şekilde tercüme et, ardından seçilen moda ("$tone") uygun olarak Gundi Bro'nun o meşhur, komik, esprili, sıcak üslubuyla derin bir analiz ve felsefi değerlendirme sun reisim!
+        
+        Cevabını şu düzende, eğlenceli ve sıcak bir tonda hazırla:
+        
+        🔮 **Gundi Bro Tercüme Köşesi**:
+        - Şarkı sözlerinin Türkçe çevirisi ve ana duygusu.
+        
+        💬 **Gundi Bro'nun Derin Felsefesi (${tone})**:
+        - Şarkının hissettirdiklerini kendi kelimelerinle, "REİSİM", "BRO", "BARIŞ ABİM" gibi hitapları kullanarak esprili bir dille yorumla.
+        
+        💃 **Gundi Bro ile DJ BYMIX DJ Önerisi**:
+        - Bu şarkıya uygun çılgın bir DJ mix veya halay/damar remix fikri öner.
+        
+        Her zaman Türkçe konuş, cana yakın ve enerjik ol!
+    """.trimIndent()
+
+    val request = GenerateContentRequest(
+        contents = listOf(Content(parts = listOf(Part(text = prompt))))
+    )
+
+    try {
+        val response = RetrofitClient.service.generateContent(apiKey, request)
+        response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+    } catch (e: Exception) {
+        e.printStackTrace()
+        "Hata oluştu reisim! Hata detayı: ${e.message}"
     }
 }
 

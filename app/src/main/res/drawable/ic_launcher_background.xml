@@ -4,12 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Beautiful Dark Cosmic Purple/Blue Solid Background -->
+    <!-- Beautiful Elegant Gold/Amber Solid Background to coordinate with the Gündi icon -->
     <path
-        android:fillColor="#1E1B24"
+        android:fillColor="#FFC107"
         android:pathData="M0,0h108v108h-108z" />
     <!-- Diagonal subtle light accent for depth -->
     <path
-        android:fillColor="#11FFFFFF"
+        android:fillColor="#15FFFFFF"
         android:pathData="M0,0 L108,108 L108,0 Z" />
 </vector>

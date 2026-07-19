@@ -14,6 +14,14 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import kotlin.math.sin
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.border
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 
 enum class CharacterExpression {
     IDLE,
@@ -125,10 +133,125 @@ fun CuteExpressionCharacter(
         else -> 0f
     }
 
-    Canvas(
-        modifier = modifier
-            .offset(x = finalOffsetX.dp, y = finalOffsetY.dp)
-    ) {
+    if (avatarStyle == "custom" || avatarStyle == "uploaded" || avatarStyle == "bymix") {
+        val speakingScale = if (expression == CharacterExpression.SPEAKING) {
+            1.0f + speechMouthScale * 0.12f
+        } else if (expression == CharacterExpression.LISTENING) {
+            1.0f + ((soundLevel).coerceIn(0f, 15f) / 15f) * 0.1f
+        } else {
+            1.0f
+        }
+        val customRotation = if (expression == CharacterExpression.THINKING) {
+            thinkingEyeXOffset * 1.5f
+        } else {
+            0f
+        }
+        val customBorderColor = when (expression) {
+            CharacterExpression.JOY -> Color(0xFFFFD54F) // Yellow glow
+            CharacterExpression.SADNESS -> Color(0xFF64B5F6) // Blue glow
+            CharacterExpression.SURPRISE -> Color(0xFFFF8A65) // Orange glow
+            CharacterExpression.THINKING -> Color(0xFFBA68C8) // Purple glow
+            CharacterExpression.LISTENING -> Color(0xFF81C784) // Green glow
+            CharacterExpression.SPEAKING -> Color(0xFF4DB6AC) // Teal glow
+            else -> Color.Transparent
+        }
+        val customBorderWidth = if (customBorderColor != Color.Transparent) 3.dp else 0.dp
+        
+        Box(
+            modifier = modifier
+                .offset(x = finalOffsetX.dp, y = finalOffsetY.dp)
+                .scale(speakingScale)
+                .graphicsLayer {
+                    rotationZ = customRotation
+                }
+                .clip(CircleShape)
+                .background(Color(0xFF1E1F24)),
+            contentAlignment = androidx.compose.ui.Alignment.Center
+        ) {
+            val baseImageModifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+            val finalImageModifier = if (customBorderWidth > 0.dp) {
+                baseImageModifier.border(customBorderWidth, customBorderColor, CircleShape)
+            } else {
+                baseImageModifier
+            }
+
+            val imageResId = if (avatarStyle == "bymix") {
+                com.example.R.drawable.gundi_app_icon_1784149123318
+            } else {
+                com.example.R.drawable.gundi_app_icon_1784149123318
+            }
+
+            Image(
+                painter = androidx.compose.ui.res.painterResource(id = imageResId),
+                contentDescription = "Gundi Özel",
+                modifier = finalImageModifier,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            
+            // Add custom visual reaction markers depending on expression
+            if (expression == CharacterExpression.SADNESS) {
+                // Let's add a crying emoji or water droplets overlay
+                androidx.compose.material3.Text(
+                    text = "💧",
+                    fontSize = 24.sp,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.CenterEnd)
+                        .offset(x = (-12).dp, y = (sadTeardropY - 10).dp)
+                )
+            }
+            if (expression == CharacterExpression.JOY) {
+                androidx.compose.material3.Text(
+                    text = "✨",
+                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.TopStart)
+                        .offset(x = 10.dp, y = 10.dp)
+                )
+            }
+            if (expression == CharacterExpression.THINKING) {
+                androidx.compose.material3.Text(
+                    text = "🤔",
+                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.TopEnd)
+                        .offset(x = (-8).dp, y = 4.dp)
+                )
+            }
+            if (expression == CharacterExpression.SURPRISE) {
+                androidx.compose.material3.Text(
+                    text = "💥",
+                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.TopStart)
+                        .offset(x = 6.dp, y = 4.dp)
+                )
+            }
+            if (expression == CharacterExpression.SPEAKING) {
+                androidx.compose.material3.Text(
+                    text = "💬",
+                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.BottomEnd)
+                        .offset(x = (-4).dp, y = (-4).dp)
+                )
+            }
+            if (expression == CharacterExpression.LISTENING) {
+                androidx.compose.material3.Text(
+                    text = "🎙️",
+                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.BottomStart)
+                        .offset(x = 4.dp, y = (-4).dp)
+                )
+            }
+        }
+    } else {
+        Canvas(
+            modifier = modifier
+                .offset(x = finalOffsetX.dp, y = finalOffsetY.dp)
+        ) {
         val width = size.width
         val height = size.height
         val centerX = width / 2
@@ -563,5 +686,231 @@ fun CuteExpressionCharacter(
                 cornerRadius = CornerRadius(1.5f, 1.5f)
             )
         }
+
+        // --- HANDS & ARMS: CHOOSE BASED ON SKIN STYLE ---
+        if (avatarStyle == "teddy") {
+            // Draw a cute little brown teddy bear held in the minion's left arm!
+            // Teddy bear center
+            val teddyCenter = Offset(centerX - 18f, centerY + 24f)
+            
+            // Draw left yellow arm/sleeve holding the teddy bear
+            val leftArmTeddy = Path().apply {
+                moveTo(centerX - 30f, centerY + 18f)
+                quadraticTo(centerX - 24f, centerY + 26f, centerX - 18f, centerY + 24f)
+            }
+            drawPath(
+                path = leftArmTeddy,
+                color = yellowBodyColor,
+                style = Stroke(width = 7f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+
+            // Head
+            drawCircle(color = Color(0xFF8D6E63), radius = 9f, center = teddyCenter)
+            // Ears
+            drawCircle(color = Color(0xFF8D6E63), radius = 3.5f, center = Offset(teddyCenter.x - 7.5f, teddyCenter.y - 7.5f))
+            drawCircle(color = Color(0xFF8D6E63), radius = 3.5f, center = Offset(teddyCenter.x + 7.5f, teddyCenter.y - 7.5f))
+            drawCircle(color = Color(0xFFFFCC80), radius = 1.8f, center = Offset(teddyCenter.x - 7.5f, teddyCenter.y - 7.5f))
+            drawCircle(color = Color(0xFFFFCC80), radius = 1.8f, center = Offset(teddyCenter.x + 7.5f, teddyCenter.y - 7.5f))
+            // Muzzle
+            drawCircle(color = Color(0xFFFFCC80), radius = 3.5f, center = Offset(teddyCenter.x, teddyCenter.y + 2.5f))
+            // Nose
+            drawCircle(color = Color(0xFF212121), radius = 1.2f, center = Offset(teddyCenter.x, teddyCenter.y + 1.5f))
+            // Eyes
+            drawCircle(color = Color(0xFF212121), radius = 1.2f, center = Offset(teddyCenter.x - 3.2f, teddyCenter.y - 1.5f))
+            drawCircle(color = Color(0xFF212121), radius = 1.2f, center = Offset(teddyCenter.x + 3.2f, teddyCenter.y - 1.5f))
+            
+            // Teddy body/torso
+            drawRoundRect(
+                color = Color(0xFF8D6E63),
+                topLeft = Offset(teddyCenter.x - 6.5f, teddyCenter.y + 9f),
+                size = Size(13f, 15f),
+                cornerRadius = CornerRadius(4.5f, 4.5f)
+            )
+            // Teddy arms/legs
+            drawCircle(color = Color(0xFF8D6E63), radius = 2.8f, center = Offset(teddyCenter.x - 8f, teddyCenter.y + 13f))
+            drawCircle(color = Color(0xFF8D6E63), radius = 2.8f, center = Offset(teddyCenter.x + 8f, teddyCenter.y + 13f))
+            drawCircle(color = Color(0xFF8D6E63), radius = 3.2f, center = Offset(teddyCenter.x - 5.5f, teddyCenter.y + 24f))
+            drawCircle(color = Color(0xFF8D6E63), radius = 3.2f, center = Offset(teddyCenter.x + 5.5f, teddyCenter.y + 24f))
+            
+            // Minion's black glove holding the teddy bear
+            drawCircle(color = Color(0xFF212121), radius = 5f, center = Offset(teddyCenter.x + 4.5f, teddyCenter.y + 11f))
+
+            // Right arm (yellow sleeve) - relaxed or waving
+            val rightArmPath = Path().apply {
+                moveTo(centerX + 30f, centerY + 18f)
+                quadraticTo(centerX + 36f, centerY + 24f, centerX + 26f, centerY + 28f)
+            }
+            drawPath(
+                path = rightArmPath,
+                color = yellowBodyColor,
+                style = Stroke(width = 7f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+            // Right black glove
+            drawCircle(
+                color = Color(0xFF212121),
+                radius = 5f,
+                center = Offset(centerX + 26f, centerY + 28f)
+            )
+        } else if (avatarStyle == "placard") {
+            // --- DRAW GUNDİ BRO PLACARD/SIGN ---
+            // Stick
+            drawRect(
+                color = Color(0xFF8D6E63), // Brown stick
+                topLeft = Offset(centerX + 38f, centerY - 15f),
+                size = Size(5f, 50f)
+            )
+            // Hand glove holding the stick
+            drawCircle(
+                color = Color(0xFF212121), // Black glove
+                radius = 5f,
+                center = Offset(centerX + 40.5f, centerY + 10f)
+            )
+            // Sign Board Background (Wooden frame)
+            drawRoundRect(
+                color = Color(0xFFFFB300), // Gold/Orange wooden border
+                topLeft = Offset(centerX + 22f, centerY - 45f),
+                size = Size(55f, 28f),
+                cornerRadius = CornerRadius(4f, 4f)
+            )
+            drawRoundRect(
+                color = Color.White, // White board
+                topLeft = Offset(centerX + 24f, centerY - 43f),
+                size = Size(51f, 24f),
+                cornerRadius = CornerRadius(2f, 2f)
+            )
+            
+            // Write "GUNDI" and "BRO" using clean lines!
+            val textColor = Color(0xFF1A237E) // Nice dark blue/black ink
+            val textStroke = 2f
+            
+            // --- G ---
+            val gPath = Path().apply {
+                moveTo(centerX + 29f, centerY - 38f)
+                lineTo(centerX + 26f, centerY - 38f)
+                lineTo(centerX + 26f, centerY - 32f)
+                lineTo(centerX + 29f, centerY - 32f)
+                lineTo(centerX + 29f, centerY - 35f)
+                lineTo(centerX + 27.5f, centerY - 35f)
+            }
+            drawPath(gPath, textColor, style = Stroke(width = textStroke))
+            
+            // --- U ---
+            val uPath = Path().apply {
+                moveTo(centerX + 31f, centerY - 38f)
+                lineTo(centerX + 31f, centerY - 33f)
+                quadraticTo(centerX + 32.5f, centerY - 31.5f, centerX + 34f, centerY - 33f)
+                lineTo(centerX + 34f, centerY - 38f)
+            }
+            drawPath(uPath, textColor, style = Stroke(width = textStroke))
+            
+            // --- N ---
+            val nPath = Path().apply {
+                moveTo(centerX + 36f, centerY - 32f)
+                lineTo(centerX + 36f, centerY - 38f)
+                lineTo(centerX + 39f, centerY - 32f)
+                lineTo(centerX + 39f, centerY - 38f)
+            }
+            drawPath(nPath, textColor, style = Stroke(width = textStroke))
+            
+            // --- D ---
+            val dPath = Path().apply {
+                moveTo(centerX + 41f, centerY - 38f)
+                lineTo(centerX + 41f, centerY - 32f)
+                lineTo(centerX + 43f, centerY - 32f)
+                quadraticTo(centerX + 44.5f, centerY - 35f, centerX + 43f, centerY - 38f)
+                close()
+            }
+            drawPath(dPath, textColor, style = Stroke(width = textStroke))
+            
+            // --- İ ---
+            drawLine(textColor, Offset(centerX + 47f, centerY - 36f), Offset(centerX + 47f, centerY - 32f), strokeWidth = textStroke)
+            drawCircle(textColor, radius = 1f, center = Offset(centerX + 47f, centerY - 38.5f))
+            
+            // --- B ---
+            val bPath = Path().apply {
+                moveTo(centerX + 50f, centerY - 32f)
+                lineTo(centerX + 50f, centerY - 25f)
+                lineTo(centerX + 52.5f, centerY - 25f)
+                quadraticTo(centerX + 54f, centerY - 26.5f, centerX + 52.5f, centerY - 28.5f)
+                lineTo(centerX + 50f, centerY - 28.5f)
+                lineTo(centerX + 52.5f, centerY - 28.5f)
+                quadraticTo(centerX + 54f, centerY - 30f, centerX + 52.5f, centerY - 32f)
+                close()
+            }
+            drawPath(bPath, textColor, style = Stroke(width = textStroke))
+            
+            // --- R ---
+            val rPath = Path().apply {
+                moveTo(centerX + 56f, centerY - 25f)
+                lineTo(centerX + 56f, centerY - 32f)
+                lineTo(centerX + 58.5f, centerY - 32f)
+                quadraticTo(centerX + 60f, centerY - 30f, centerX + 58.5f, centerY - 28.5f)
+                lineTo(centerX + 56f, centerY - 28.5f)
+                moveTo(centerX + 57.5f, centerY - 28.5f)
+                lineTo(centerX + 59.5f, centerY - 25f)
+            }
+            drawPath(rPath, textColor, style = Stroke(width = textStroke))
+            
+            // --- O ---
+            drawOval(
+                color = textColor,
+                topLeft = Offset(centerX + 62f, centerY - 32f),
+                size = Size(5.5f, 7f),
+                style = Stroke(width = textStroke)
+            )
+        } else {
+            // --- DRAW CUTE HAND-CLASPING ARMS/HANDS (IMAGE 1 STYLE) ---
+            // Left arm (yellow sleeve)
+            val leftSleevePath = Path().apply {
+                moveTo(centerX - 30f, centerY + 18f)
+                quadraticTo(centerX - 20f, centerY + 30f, centerX - 5f, centerY + 28f)
+            }
+            drawPath(
+                path = leftSleevePath,
+                color = yellowBodyColor,
+                style = Stroke(width = 7f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+            drawPath(
+                path = leftSleevePath,
+                color = yellowShadowColor,
+                style = Stroke(width = 7f, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                alpha = 0.3f
+            )
+
+            // Right arm (yellow sleeve)
+            val rightSleevePath = Path().apply {
+                moveTo(centerX + 30f, centerY + 18f)
+                quadraticTo(centerX + 20f, centerY + 30f, centerX + 5f, centerY + 28f)
+            }
+            drawPath(
+                path = rightSleevePath,
+                color = yellowBodyColor,
+                style = Stroke(width = 7f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+            drawPath(
+                path = rightSleevePath,
+                color = yellowShadowColor,
+                style = Stroke(width = 7f, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                alpha = 0.3f
+            )
+
+            // Black gloves clasping in front
+            drawCircle(
+                color = Color(0xFF212121), // Black glove left
+                radius = 5.5f,
+                center = Offset(centerX - 4f, centerY + 28f)
+            )
+            drawCircle(
+                color = Color(0xFF212121), // Black glove right
+                radius = 5.5f,
+                center = Offset(centerX + 4f, centerY + 28f)
+            )
+            drawCircle(
+                color = Color(0xFF1E1E1E), // Clasp overlap shadow
+                radius = 4f,
+                center = Offset(centerX, centerY + 28f)
+            )
+        }
     }
+}
 }

@@ -96,6 +96,7 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
+  implementation(libs.google.generativeai)
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)
 
@@ -130,6 +131,7 @@ dependencies {
   androidTestImplementation(libs.androidx.runner)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
-  "ksp"(libs.androidx.room.compiler)
-  "ksp"(libs.moshi.kotlin.codegen)
+  ksp(libs.androidx.room.compiler)
+  ksp(libs.moshi.kotlin.codegen)
+  implementation("androidx.media:media:1.7.0") // ses çalmak için
 }

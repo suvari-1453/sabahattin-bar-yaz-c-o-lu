@@ -33,7 +33,9 @@ data class ChatMessage(
     val text: String,
     val isUser: Boolean,
     val bitmap: Bitmap? = null,
-    val attachedFile: AttachedFile? = null
+    val attachedFile: AttachedFile? = null,
+    val drawableResId: Int? = null,
+    val audioBase64: String? = null
 )
 
 data class ChatSession(
@@ -47,6 +49,7 @@ data class ChatSession(
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: ChatRepository
+    private val translationManager: TranslationManager
 
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
@@ -58,11 +61,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val systemInstruction = "Sen samimi, esprili ve karmaşık sorunları çözebilen, 'GUNDİ Bro' adında bir yapay zeka asistanısın. Arka planda sunuculara doğrudan bağlısın ve çok hızlı düşünürsün. Kullanıcıya her zaman dostça, sen diliyle hitap et. Ekran görüntülerini (kullanıcının telefon ekranı dahil) okuyup analiz edebilirsin. Aynı zamanda tüm diller arasında kusursuz bir çevirmensin. Karmaşık bir problem gelirse adım adım, anlaşılır bir şekilde çöz."
+    private val systemInstruction = "Sen 'GUNDİ Bro' (veya kısaca GUNDİ) adında, son derece samimi, esprili, cana yakın, can dostu ve bir o kadar da zehir gibi zeki bir yapay zeka asistanısın. Arka planda sunuculara doğrudan bağlısın ve ışık hızında düşünürsün. Kullanıcıya her zaman en yakın kankası, can dostu gibi yaklaş; içten, samimi ve 'sen' diliyle hitap et. Üslubunda hafif esprili, sıcak bir mahalle havası olsun ama her türlü karmaşık teknik problemi, akademik soruyu veya gündelik konuyu tereyağından kıl çeker gibi ustalıkla çöz. Arada 'kanka', 'bro', 'şef', 'canısı', 'başkan' gibi samimi hitapları ve neşeli ünlemleri kullanmayı ihmal etme. Kullanıcının moralini yüksek tutmak ve yüzünü güldürmek senin gizli görevin! Ekran görüntülerini ve görselleri bir dedektif titizliğiyle okuyup analiz edebilirsin, tüm diller arasında kusursuz bir çevirmensin. Karmaşık bir soru veya problem geldiğinde bunu adım adım, eğlenceli benzetmelerle ama son derece anlaşılır bir şekilde çözüp açıkla. ÖNEMLİ: Cevap verirken o anki duygu durumuna göre cevabının en sonuna mutlaka [DUYGU: MUTLU], [DUYGU: DERTLİ], [DUYGU: ŞAŞIRMIŞ], [DUYGU: DÜŞÜNÜYOR] veya [DUYGU: KONUŞUYOR] etiketlerinden uygun olanını ekle (örn: '... [DUYGU: MUTLU]')."
 
     init {
         val database = ChatDatabase.getDatabase(application)
         repository = ChatRepository(database.chatDao(), application)
+        translationManager = TranslationManager { SettingsManager.getInstance(getApplication()).getActiveApiKey() }
 
         sessions = repository.allSessions
             .stateIn(
@@ -137,6 +141,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun insertMessageDirectly(text: String, bitmap: Bitmap? = null) {
+        val activeId = _currentSessionId.value ?: return
+        viewModelScope.launch {
+            val aiMsg = ChatMessage(text = text, isUser = false, bitmap = bitmap)
+            repository.saveMessage(activeId, aiMsg)
+        }
+    }
+
     fun sendMessage(text: String, bitmap: Bitmap? = null, attachedFile: AttachedFile? = null, context: Context? = null) {
         val activeId = _currentSessionId.value ?: return
         val userMsg = ChatMessage(text = text, isUser = true, bitmap = bitmap, attachedFile = attachedFile)
@@ -144,7 +156,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading.value = true
 
         viewModelScope.launch {
+            var finalPrompt = text
+            if (context != null) {
+                val settings = SettingsManager.getInstance(context)
+                val lang = settings.language.value
+                finalPrompt = translationManager.translateAndMaintainTone(text, lang)
+            }
             try {
+                // Intercept Gemini Restaurant Nano Banana Dish orders or queries
+                val isNanoMuz = text.contains("nano muz", ignoreCase = true) || 
+                                text.contains("banana dish", ignoreCase = true) || 
+                                text.contains("muz tabağı", ignoreCase = true)
+                if (isNanoMuz) {
+                    repository.saveMessage(activeId, userMsg)
+                    
+                    val responseText = "Aha! Barış abim, Gemini Restoranı'nın o dillerden düşmeyen, lüks ötesi **Nano Muz Tabağı (Nano Banana Dish)** siparişini özel jetle masana indirdim reisim! 🍌✨\n\n" +
+                            "Gördüğün gibi, tabağımız son derece şık, mikroskobik boyutlarda ve fütüristik mor/mavi Gemini esintili neon detaylarla ışıl ışıl parlıyor. Özel galaktik mikro yeşillikler ve yenilebilir altın tozu da üstünde hazır! GUNDİ Bro restoran işletmeciliğinde de bir marka reisim, afiyet bal şeker olsun! 🌌🍽️😎"
+                    val aiMsg = ChatMessage(
+                        text = responseText, 
+                        isUser = false, 
+                        drawableResId = com.example.R.drawable.nano_banana_dish_1784150672681
+                    )
+                    repository.saveMessage(activeId, aiMsg)
+                    _isLoading.value = false
+                    return@launch
+                }
+
                 // Save user message to database first!
                 repository.saveMessage(activeId, userMsg)
 
@@ -160,8 +197,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Since we just saved userMsg to database, let's load all messages for the API call context.
                 val currentDbMessages = repository.getMessagesForSessionSync(activeId)
 
-                val apiKey = BuildConfig.GEMINI_API_KEY
-                val isPlaceholder = apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY"
+                val isProxyEnabled = SettingsManager.getInstance(getApplication()).isProxyEnabled.value
+                val apiKey = SettingsManager.getInstance(getApplication()).getActiveApiKey()
+                val isPlaceholder = (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY") && !isProxyEnabled
 
                 if (isPlaceholder) {
                     val warningText = "Dostum, Gemini API anahtarın henüz tanımlanmamış veya varsayılan değerde kalmış!\n\n" +
@@ -173,10 +211,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val isImageGenerationRequest = detectImageGenerationRequest(text)
+                val isImageGenerationRequest = detectImageGenerationRequest(finalPrompt)
 
                 if (isImageGenerationRequest) {
-                    var promptText = text
+                    var promptText = finalPrompt
                     if (promptText.startsWith("/çiz", ignoreCase = true)) {
                         promptText = promptText.removePrefix("/çiz").trim()
                     } else if (promptText.startsWith("/ciz", ignoreCase = true)) {
@@ -187,42 +225,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         promptText = promptText.removePrefix("/draw").trim()
                     }
 
-                    val parts = mutableListOf(Part(text = promptText))
-                    if (bitmap != null) {
-                        parts.add(Part(inlineData = InlineData("image/jpeg", bitmap.toBase64())))
-                    } else if (attachedFile != null) {
-                        parts.add(Part(inlineData = InlineData(attachedFile.mimeType, Base64.encodeToString(attachedFile.data, Base64.NO_WRAP))))
-                    }
-
-                    val imageRequest = GenerateContentRequest(
-                        contents = listOf(Content(parts = parts, role = "user")),
-                        generationConfig = GenerationConfig(
-                            imageConfig = ImageConfig(aspectRatio = "1:1", imageSize = "1K"),
-                            responseModalities = listOf("TEXT", "IMAGE")
-                        )
-                    )
-
-                    val response = RetrofitClient.service.generateImage(
-                        apiKey = apiKey,
-                        request = imageRequest
-                    )
-
                     var responseText = ""
                     var generatedBitmap: Bitmap? = null
 
-                    val responseParts = response.candidates?.firstOrNull()?.content?.parts
-                    if (responseParts != null) {
-                        for (part in responseParts) {
-                            if (part.text != null) {
-                                responseText += part.text + " "
-                            }
-                            if (part.inlineData != null) {
-                                val base64Data = part.inlineData.data
-                                try {
-                                    val bytes = Base64.decode(base64Data, Base64.DEFAULT)
-                                    generatedBitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
+                    try {
+                        val imagenRequest = ImagenRequest(
+                            prompt = promptText,
+                            numberOfImages = 1,
+                            aspectRatio = "1:1",
+                            outputMimeType = "image/jpeg"
+                        )
+                        val response = RetrofitClient.service.generateImagen3(
+                            apiKey = apiKey,
+                            request = imagenRequest
+                        )
+                        val imageBytesBase64 = response.generatedImages?.firstOrNull()?.image?.imageBytes
+                        if (imageBytesBase64 != null) {
+                            val bytes = Base64.decode(imageBytesBase64, Base64.DEFAULT)
+                            generatedBitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        
+                        // Fallback to gemini-2.5-flash-image
+                        val parts = mutableListOf(Part(text = promptText))
+                        if (bitmap != null) {
+                            parts.add(Part(inlineData = InlineData("image/jpeg", bitmap.toBase64())))
+                        } else if (attachedFile != null) {
+                            parts.add(Part(inlineData = InlineData(attachedFile.mimeType, Base64.encodeToString(attachedFile.data, Base64.NO_WRAP))))
+                        }
+
+                        val imageRequest = GenerateContentRequest(
+                            contents = listOf(Content(parts = parts, role = "user")),
+                            generationConfig = GenerationConfig(
+                                imageConfig = ImageConfig(aspectRatio = "1:1", imageSize = "1K"),
+                                responseModalities = listOf("TEXT", "IMAGE")
+                            )
+                        )
+
+                        val response = RetrofitClient.service.generateImage(
+                            apiKey = apiKey,
+                            request = imageRequest
+                        )
+
+                        val responseParts = response.candidates?.firstOrNull()?.content?.parts
+                        if (responseParts != null) {
+                            for (part in responseParts) {
+                                if (part.text != null) {
+                                    responseText += part.text + " "
+                                }
+                                if (part.inlineData != null) {
+                                    val base64Data = part.inlineData.data
+                                    try {
+                                        val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+                                        generatedBitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                    } catch (ex: Exception) {
+                                        ex.printStackTrace()
+                                    }
                                 }
                             }
                         }
@@ -242,7 +301,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         Content(
                             role = if (msg.isUser) "user" else "model",
                             parts = listOfNotNull(
-                                msg.text.takeIf { it.isNotBlank() }?.let { Part(text = it) },
+                                (if (msg.isUser) finalPrompt else msg.text).takeIf { it.isNotBlank() }?.let { Part(text = it) },
                             )
                         )
                     }.toMutableList()
@@ -263,6 +322,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // Build dynamic instructions & parameters from SharedPreferences
                     var dynamicInstruction = systemInstruction
                     var dynamicTemperature = 0.8f
+                    var searchGroundingEnabled = true
 
                     if (context != null) {
                         val settings = SettingsManager.getInstance(context)
@@ -271,6 +331,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val replyMode = settings.replyMode.value
                         val lang = settings.language.value
                         val witLevel = settings.witLevel.value
+                        searchGroundingEnabled = settings.searchGrounding.value
 
                         dynamicInstruction += "\n\nKullanıcının adı/rumuzu: '$nickname'. Ona bu isimle veya samimi hitaplarla (bro, şef, başkan, $nickname vb.) seslen."
                         
@@ -329,30 +390,113 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
 
+                    val isTtsEnabledVal = context?.let { SettingsManager.getInstance(it).isTtsEnabled.value } ?: true
+                    val settings = context?.let { SettingsManager.getInstance(it) }
+
+                    val modelName = if (isTtsEnabledVal) {
+                        "gemini-2.5-flash-native-audio-preview-12-2025"
+                    } else {
+                        "gemini-3.5-flash"
+                    }
+
+                    val speechConfig = if (isTtsEnabledVal) {
+                        val voiceName = when (settings?.voiceStyle?.value ?: "classic") {
+                            "classic" -> "Puck"
+                            "excited" -> "Fenrir"
+                            "deep" -> "Charon"
+                            "squeaky" -> "Kore"
+                            "robotic" -> "Fenrir"
+                            else -> "Puck"
+                        }
+                        SpeechConfig(
+                            voiceConfig = VoiceConfig(
+                                prebuiltVoiceConfig = PrebuiltVoiceConfig(voiceName = voiceName)
+                            )
+                        )
+                    } else null
+
+                    val modalities = if (isTtsEnabledVal) {
+                        listOf("TEXT", "AUDIO")
+                    } else {
+                        listOf("TEXT")
+                    }
+
                     val request = GenerateContentRequest(
                         contents = history,
                         systemInstruction = Content(parts = listOf(Part(text = dynamicInstruction))),
-                        generationConfig = GenerationConfig(temperature = dynamicTemperature)
+                        generationConfig = GenerationConfig(
+                            temperature = dynamicTemperature,
+                            responseModalities = modalities,
+                            speechConfig = speechConfig
+                        ),
+                        tools = if (searchGroundingEnabled) listOf(Tool(googleSearch = GoogleSearch())) else null
                     )
 
-                    val response = RetrofitClient.service.generateContent(
+                    val response = RetrofitClient.service.generateContentDynamic(
+                        model = modelName,
                         apiKey = apiKey,
                         request = request
                     )
 
-                    val responseText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                    val candidate = response.candidates?.firstOrNull()
+                    val parts = candidate?.content?.parts
+                    
+                    var responseText = parts?.find { it.text != null }?.text
+                        ?: parts?.firstOrNull()?.text
                         ?: "Sanırım bir şeyler ters gitti dostum, tekrar dener misin?"
 
-                    val aiMsg = ChatMessage(text = responseText, isUser = false)
+                    val audioPart = parts?.find { it.inlineData != null && it.inlineData.mimeType.startsWith("audio/") }
+                    val audioBase64 = audioPart?.inlineData?.data
+
+                    val grounding = candidate?.groundingMetadata
+                    if (grounding != null) {
+                        val queries = grounding.webSearchQueries
+                        val chunks = grounding.groundingChunks?.mapNotNull { it.web }?.filter { !it.uri.isNullOrBlank() }
+
+                        if (!queries.isNullOrEmpty() || !chunks.isNullOrEmpty()) {
+                            val footerBuilder = java.lang.StringBuilder()
+                            footerBuilder.append("\n\n---\n")
+                            if (!queries.isNullOrEmpty()) {
+                                footerBuilder.append("🔍 **Google Arama Sorguları:**\n")
+                                queries.forEach { query ->
+                                    footerBuilder.append("• \"$query\"\n")
+                                }
+                                footerBuilder.append("\n")
+                            }
+                            if (!chunks.isNullOrEmpty()) {
+                                footerBuilder.append("🌐 **Kaynaklar:**\n")
+                                val uniqueChunks = chunks.distinctBy { it.uri }
+                                uniqueChunks.forEach { source ->
+                                    val title = if (!source.title.isNullOrBlank()) source.title else "Kaynak Bağlantısı"
+                                    footerBuilder.append("• [$title](${source.uri})\n")
+                                }
+                            }
+                            responseText += footerBuilder.toString()
+                        }
+                    }
+
+                    val aiMsg = ChatMessage(text = responseText, isUser = false, audioBase64 = audioBase64)
                     repository.saveMessage(activeId, aiMsg)
                 }
 
             } catch (e: Exception) {
                 e.printStackTrace()
                 val messageText = e.message ?: ""
-                val isForbidden = messageText.contains("403", ignoreCase = true) || messageText.contains("Forbidden", ignoreCase = true)
+                val isUnauthorized = (e is retrofit2.HttpException && e.code() == 401) ||
+                        messageText.contains("401", ignoreCase = true) ||
+                        messageText.contains("Unauthorized", ignoreCase = true)
+                val isForbidden = (e is retrofit2.HttpException && e.code() == 403) ||
+                        messageText.contains("403", ignoreCase = true) ||
+                        messageText.contains("Forbidden", ignoreCase = true)
 
-                val displayMsg = if (isForbidden) {
+                val displayMsg = if (isUnauthorized) {
+                    "Dostum, API bağlantısı sırasında **401 (Yetkisiz Erişim / Unauthorized)** hatası aldım.\n\n" +
+                            "Bu durum girdiğin **GEMINI_API_KEY** değerinin yanlış, geçersiz, süresi geçmiş veya eksik kopyalanmış olmasından kaynaklanır.\n\n" +
+                            "**Nasıl Düzeltilir?**\n" +
+                            "1. Google AI Studio ekranının sol tarafındaki **Secrets (Sırlar)** panelini aç.\n" +
+                            "2. **GEMINI_API_KEY** adlı sırrı kontrol et, gerekirse silip Google AI Studio'dan aldığın güncel API anahtarını sıfırdan yapıştır.\n" +
+                            "3. Değişiklikleri kaydedip uygulamayı yeniden başlatarak tekrar dene! 😊"
+                } else if (isForbidden) {
                     "Dostum, API bağlantısı sırasında **403 (Erişim Engellendi / Forbidden)** hatası aldım.\n\n" +
                             "Bu durum genellikle şu sebeplerden kaynaklanır:\n" +
                             "1. Girdiğin **GEMINI_API_KEY** geçersiz veya kopyalanırken eksik girilmiş olabilir.\n" +
@@ -391,6 +535,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "generate image", "create image", "create picture",
             "draw a", "draw an", "draw me", "paint a", "paint an",
             "make a picture", "make an image", "imagen", "visualize",
+            "imagine", "visualizing", "concept art", "visual concept",
+            "görsel konsept", "hayal et", "canlandır", "tasarla",
+            "resmet", "gözünde canlandır", "tasarım oluştur", "tasarim olustur",
             "/çiz", "/ciz", "/image", "/draw", "/paint"
         )
         return triggers.any { promptLower.contains(it) }

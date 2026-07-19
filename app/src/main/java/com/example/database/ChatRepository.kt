@@ -45,7 +45,9 @@ class ChatRepository(private val chatDao: ChatDao, private val context: Context?
                     text = entity.text,
                     isUser = entity.isUser,
                     bitmap = bitmap,
-                    attachedFile = null
+                    attachedFile = null,
+                    drawableResId = entity.drawableResId,
+                    audioBase64 = entity.audioBase64
                 )
             }
         }
@@ -71,7 +73,9 @@ class ChatRepository(private val chatDao: ChatDao, private val context: Context?
                 text = entity.text,
                 isUser = entity.isUser,
                 bitmap = bitmap,
-                attachedFile = null
+                attachedFile = null,
+                drawableResId = entity.drawableResId,
+                audioBase64 = entity.audioBase64
             )
         }
     }
@@ -102,7 +106,9 @@ class ChatRepository(private val chatDao: ChatDao, private val context: Context?
                 sessionId = sessionId,
                 text = message.text,
                 isUser = message.isUser,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                drawableResId = message.drawableResId,
+                audioBase64 = message.audioBase64
             )
         )
         message.bitmap?.let { bmp ->
@@ -126,5 +132,11 @@ class ChatRepository(private val chatDao: ChatDao, private val context: Context?
     suspend fun deleteSession(sessionId: String) {
         chatDao.deleteSession(sessionId)
         chatDao.deleteMessagesForSession(sessionId)
+    }
+
+    val allMessagesFlow: Flow<List<ChatMessageEntity>> = chatDao.getAllMessagesFlow()
+
+    suspend fun deleteMessageById(id: String) {
+        chatDao.deleteMessageById(id)
     }
 }

@@ -46,6 +46,7 @@ fun SocialMediaAnalyzerDialog(
     
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val platforms = listOf("Instagram", "X (Twitter)", "YouTube", "LinkedIn", "TikTok")
     val tones = listOf("Samimi & Eğlenceli", "Profesyonel & Kurumsal", "Heyecanlı & Dikkat Çekici", "Bilgilendirici & Net", "Mizahi & İronik")
@@ -257,7 +258,7 @@ fun SocialMediaAnalyzerDialog(
                                 errorMessage = null
                                 analyzing = true
                                 coroutineScope.launch {
-                                    val result = performSocialMediaAnalysis(postText, selectedPlatform, selectedTone)
+                                    val result = performSocialMediaAnalysis(postText, selectedPlatform, selectedTone, context)
                                     analyzing = false
                                     if (result != null) {
                                         analysisResult = result
@@ -367,8 +368,8 @@ fun SocialMediaAnalyzerDialog(
     }
 }
 
-private suspend fun performSocialMediaAnalysis(text: String, platform: String, tone: String): String? = withContext(Dispatchers.IO) {
-    val apiKey = BuildConfig.GEMINI_API_KEY
+private suspend fun performSocialMediaAnalysis(text: String, platform: String, tone: String, context: android.content.Context): String? = withContext(Dispatchers.IO) {
+    val apiKey = SettingsManager.getInstance(context).getActiveApiKey()
     if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "GEMINI_API_KEY") {
         return@withContext null
     }

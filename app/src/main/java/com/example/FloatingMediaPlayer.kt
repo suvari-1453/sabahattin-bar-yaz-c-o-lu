@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -185,11 +186,11 @@ fun FloatingMediaPlayer(modifier: Modifier = Modifier) {
     if (!MediaPlayerManager.showPlayer) return
 
     // Position State for Draggability
-    var offsetX by remember { mutableStateOf(20f) }
-    var offsetY by remember { mutableStateOf(100f) }
+    var offsetX by rememberSaveable { mutableStateOf(20f) }
+    var offsetY by rememberSaveable { mutableStateOf(100f) }
 
     // Rotate animation for collapsed vinyl disk
-    var diskRotation by remember { mutableStateOf(0f) }
+    var diskRotation by rememberSaveable { mutableStateOf(0f) }
     LaunchedEffect(MediaPlayerManager.isPlaying) {
         while (MediaPlayerManager.isPlaying) {
             diskRotation = (diskRotation + 3f) % 360f

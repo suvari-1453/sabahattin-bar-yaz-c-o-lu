@@ -64,6 +64,9 @@ class SettingsManager private constructor(context: Context) {
     private val _isTtsEnabled = MutableStateFlow(getSavedIsTtsEnabled())
     val isTtsEnabled: StateFlow<Boolean> = _isTtsEnabled.asStateFlow()
 
+    private val _isSoundEffectsEnabled = MutableStateFlow(getSavedIsSoundEffectsEnabled())
+    val isSoundEffectsEnabled: StateFlow<Boolean> = _isSoundEffectsEnabled.asStateFlow()
+
     private val _witLevel = MutableStateFlow(getSavedWitLevel())
     val witLevel: StateFlow<Float> = _witLevel.asStateFlow()
 
@@ -81,6 +84,40 @@ class SettingsManager private constructor(context: Context) {
 
     private val _isBubbleEnabled = MutableStateFlow(getSavedIsBubbleEnabled())
     val isBubbleEnabled: StateFlow<Boolean> = _isBubbleEnabled.asStateFlow()
+
+    private val _searchGrounding = MutableStateFlow(getSavedSearchGrounding())
+    val searchGrounding: StateFlow<Boolean> = _searchGrounding.asStateFlow()
+
+    private val _customApiKey = MutableStateFlow(getSavedCustomApiKey())
+    val customApiKey: StateFlow<String> = _customApiKey.asStateFlow()
+
+    private val _isProxyEnabled = MutableStateFlow(getSavedIsProxyEnabled())
+    val isProxyEnabled: StateFlow<Boolean> = _isProxyEnabled.asStateFlow()
+
+    private val _proxyUrl = MutableStateFlow(getSavedProxyUrl())
+    val proxyUrl: StateFlow<String> = _proxyUrl.asStateFlow()
+
+    private val _secondaryProxyUrl = MutableStateFlow(getSavedSecondaryProxyUrl())
+    val secondaryProxyUrl: StateFlow<String> = _secondaryProxyUrl.asStateFlow()
+
+    private val _isSecureKeyStripEnabled = MutableStateFlow(getSavedIsSecureKeyStripEnabled())
+    val isSecureKeyStripEnabled: StateFlow<Boolean> = _isSecureKeyStripEnabled.asStateFlow()
+
+    private val _proxyAuthToken = MutableStateFlow(getSavedProxyAuthToken())
+    val proxyAuthToken: StateFlow<String> = _proxyAuthToken.asStateFlow()
+
+    private val _proxyUsername = MutableStateFlow(getSavedProxyUsername())
+    val proxyUsername: StateFlow<String> = _proxyUsername.asStateFlow()
+
+    private val _proxyPassword = MutableStateFlow(getSavedProxyPassword())
+    val proxyPassword: StateFlow<String> = _proxyPassword.asStateFlow()
+
+    private val _isPasscodeEnabled = MutableStateFlow(getSavedIsPasscodeEnabled())
+    val isPasscodeEnabled: StateFlow<Boolean> = _isPasscodeEnabled.asStateFlow()
+
+    private val _appPasscode = MutableStateFlow(getSavedAppPasscode())
+    val appPasscode: StateFlow<String> = _appPasscode.asStateFlow()
+
 
 
     // --- Setters that persist and update UI instantly ---
@@ -150,6 +187,11 @@ class SettingsManager private constructor(context: Context) {
         _isTtsEnabled.value = value
     }
 
+    fun setIsSoundEffectsEnabled(value: Boolean) {
+        prefs.edit().putBoolean("is_sound_effects_enabled", value).apply()
+        _isSoundEffectsEnabled.value = value
+    }
+
     fun setWitLevel(value: Float) {
         prefs.edit().putFloat("wit_level", value).apply()
         _witLevel.value = value
@@ -204,6 +246,78 @@ class SettingsManager private constructor(context: Context) {
         _isBubbleEnabled.value = value
     }
 
+    fun setSearchGrounding(value: Boolean) {
+        prefs.edit().putBoolean("search_grounding", value).apply()
+        _searchGrounding.value = value
+    }
+
+    fun setCustomApiKey(value: String) {
+        prefs.edit().putString("custom_api_key", value).apply()
+        _customApiKey.value = value
+    }
+
+    fun setIsProxyEnabled(value: Boolean) {
+        prefs.edit().putBoolean("is_proxy_enabled", value).apply()
+        _isProxyEnabled.value = value
+    }
+
+    fun setProxyUrl(value: String) {
+        prefs.edit().putString("proxy_url", value).apply()
+        _proxyUrl.value = value
+    }
+
+    fun setSecondaryProxyUrl(value: String) {
+        prefs.edit().putString("secondary_proxy_url", value).apply()
+        _secondaryProxyUrl.value = value
+    }
+
+    fun setIsSecureKeyStripEnabled(value: Boolean) {
+        prefs.edit().putBoolean("is_secure_key_strip_enabled", value).apply()
+        _isSecureKeyStripEnabled.value = value
+    }
+
+    fun setProxyAuthToken(value: String) {
+        prefs.edit().putString("proxy_auth_token", value).apply()
+        _proxyAuthToken.value = value
+    }
+
+    fun setProxyUsername(value: String) {
+        prefs.edit().putString("proxy_username", value).apply()
+        _proxyUsername.value = value
+    }
+
+    fun setProxyPassword(value: String) {
+        prefs.edit().putString("proxy_password", value).apply()
+        _proxyPassword.value = value
+    }
+
+    fun setIsPasscodeEnabled(value: Boolean) {
+        prefs.edit().putBoolean("is_passcode_enabled", value).apply()
+        _isPasscodeEnabled.value = value
+    }
+
+    fun setAppPasscode(value: String) {
+        prefs.edit().putString("app_passcode", value).apply()
+        _appPasscode.value = value
+    }
+
+
+    fun getActiveApiKey(): String {
+        val saved = customApiKey.value.trim()
+        if (saved.isNotBlank()) return saved
+        
+        val rotated = GundiApiRotator.getActiveApiKey()
+        if (rotated.isNotBlank()) return rotated
+        
+        val buildKey = BuildConfig.GEMINI_API_KEY
+        if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY" && buildKey != "GEMINI_API_KEY") {
+            return buildKey
+        }
+        
+        // Fallback user-provided key
+        return "910978c5f20b4b55ad3f02d3a8870e3e"
+    }
+
 
     // --- SharedPreferences Readers ---
 
@@ -220,10 +334,22 @@ class SettingsManager private constructor(context: Context) {
     private fun getSavedHapticFeedback(): Boolean = prefs.getBoolean("haptic_feedback", true)
     private fun getSavedDebugLogging(): Boolean = prefs.getBoolean("debug_logging", false)
     private fun getSavedIsTtsEnabled(): Boolean = prefs.getBoolean("is_tts_enabled", true)
+    private fun getSavedIsSoundEffectsEnabled(): Boolean = prefs.getBoolean("is_sound_effects_enabled", true)
     private fun getSavedWitLevel(): Float = prefs.getFloat("wit_level", 3.0f)
     private fun getSavedGundiAvatar(): String = prefs.getString("gundi_avatar", "classic") ?: "classic"
     private fun getSavedSpeechPitch(): Float = prefs.getFloat("speech_pitch", 1.0f)
     private fun getSavedVoiceStyle(): String = prefs.getString("voice_style", "classic") ?: "classic"
     private fun getSavedStartupGreeting(): String = prefs.getString("startup_greeting", "Hoş geldin reisim Barış abim!") ?: "Hoş geldin reisim Barış abim!"
     private fun getSavedIsBubbleEnabled(): Boolean = prefs.getBoolean("is_bubble_enabled", false)
+    private fun getSavedSearchGrounding(): Boolean = prefs.getBoolean("search_grounding", true)
+    private fun getSavedCustomApiKey(): String = prefs.getString("custom_api_key", "910978c5f20b4b55ad3f02d3a8870e3e") ?: "910978c5f20b4b55ad3f02d3a8870e3e"
+    private fun getSavedIsProxyEnabled(): Boolean = prefs.getBoolean("is_proxy_enabled", true)
+    private fun getSavedProxyUrl(): String = prefs.getString("proxy_url", "http://10.86.137.196:8070/") ?: "http://10.86.137.196:8070/"
+    private fun getSavedSecondaryProxyUrl(): String = prefs.getString("secondary_proxy_url", "http://192.168.1.58:9999/") ?: "http://192.168.1.58:9999/"
+    private fun getSavedIsSecureKeyStripEnabled(): Boolean = prefs.getBoolean("is_secure_key_strip_enabled", false)
+    private fun getSavedProxyAuthToken(): String = prefs.getString("proxy_auth_token", "") ?: ""
+    private fun getSavedProxyUsername(): String = prefs.getString("proxy_username", "Bymix") ?: "Bymix"
+    private fun getSavedProxyPassword(): String = prefs.getString("proxy_password", "bymix1453") ?: "bymix1453"
+    private fun getSavedIsPasscodeEnabled(): Boolean = prefs.getBoolean("is_passcode_enabled", true)
+    private fun getSavedAppPasscode(): String = prefs.getString("app_passcode", "1234") ?: "1234"
 }

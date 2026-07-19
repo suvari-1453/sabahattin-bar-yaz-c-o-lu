@@ -1,4 +1,4 @@
-package com.example
+package gundi.com
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,4 +19,3 @@ class ExampleInstrumentedTest {
     val appContext = InstrumentationRegistry.getInstrumentation().targetContext
     assertEquals("com.example", appContext.packageName)
   }
-}

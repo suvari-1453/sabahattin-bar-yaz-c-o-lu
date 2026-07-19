@@ -17,5 +17,7 @@ data class ChatMessageEntity(
     val sessionId: String,
     val text: String,
     val isUser: Boolean,
-    val timestamp: Long
+    val timestamp: Long,
+    val drawableResId: Int? = null,
+    val audioBase64: String? = null
 )
